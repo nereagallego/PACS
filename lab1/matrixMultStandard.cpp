@@ -27,7 +27,7 @@ void multiplyMatrix(int N, vector<vector<double>> m1, vector<vector<double>> m2,
 }
 
 int main(int argc, char *argv[]){
-    int N = 1000;
+    int N = 2000;
     vector<vector<double>> matrix1, matrix2, result;
 
     srandom(time(NULL));

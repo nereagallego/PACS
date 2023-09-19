@@ -5,7 +5,7 @@
 
 int main()
 {
-    int N = 20000; 
+    int N = 2000; 
 
     Eigen::MatrixXd mat = Eigen::MatrixXd::Random(N,N);
     // std::cout << "Here is mat*mat:\n" << mat*mat << std::endl;
