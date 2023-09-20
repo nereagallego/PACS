@@ -1,11 +1,11 @@
 #include <iostream>
 #include <Eigen/Dense>
 
-// #define EIGEN_DONT_VECTORIZE 1
+#define EIGEN_DONT_VECTORIZE 1
 
 int main()
 {
-    int N = 5000; 
+    int N = 3000; 
 
     Eigen::MatrixXd mat = Eigen::MatrixXd::Random(N,N);
     Eigen::MatrixXd result(N,N);
