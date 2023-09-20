@@ -1,8 +1,6 @@
 #include <iostream>
 #include <Eigen/Dense>
 
-#define EIGEN_DONT_VECTORIZE 1
-
 int main()
 {
     int N = 3000; 
