@@ -2,5 +2,5 @@
 
 for i in {1..10}
 do
-    time ./matrixMultEigen
+    time ./matrixMultEigen $1
 done
