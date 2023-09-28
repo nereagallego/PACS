@@ -53,12 +53,5 @@ int main(int argc, char *argv[]){
     }
 
     multiplyMatrix(N, matrix1, matrix2, result);
-
-    // for(int i = 0; i < N; i++){
-    //     for (int j = 0; j < N; j++){
-    //         // cout << result[i][j] << " ";
-    //     }
-    //     cout << endl;
-    // }
     return 0;
 }

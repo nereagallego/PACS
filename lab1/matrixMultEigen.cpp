@@ -9,5 +9,4 @@ int main()
     Eigen::MatrixXd result(N,N);
     result = mat*mat;
 
-    // std::cout << "Here is mat*mat:\n" << mat*mat << std::endl;
 }
