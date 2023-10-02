@@ -2,5 +2,5 @@
 
 for i in {1..10}
 do
-    time ./matrixMultStandard $1
+    ./matrixMultStandardClock $1
 done

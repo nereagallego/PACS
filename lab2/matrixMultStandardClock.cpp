@@ -1,7 +1,8 @@
 #include <vector>
 #include <random>
 #include <iostream>
-#include <time.h>
+#include <ctime>
+#include <iomanip>
 
 using namespace std;
 
@@ -10,7 +11,7 @@ using namespace std;
 const long max_rand = 1000000L;
 
 double randomNumber(){
-    const double lower_bound = 0;
+const double lower_bound = 0;
 const double upper_bound = 10;  
    
    return lower_bound + (upper_bound - lower_bound) * (random() % max_rand) / max_rand;
@@ -27,14 +28,13 @@ void multiplyMatrix(int N, vector<vector<double>> m1, vector<vector<double>> m2,
 }
 
 int main(int argc, char *argv[]){
+    clock_t time;
+    time = clock();
     if(argc < 2){
         cerr << "Usage ./matrixMultEigen.cpp <N>" << endl;
     }
-
     int N = atoi(argv[1]); 
     vector<vector<double>> matrix1, matrix2, result;
-
-    srandom(time(NULL));
 
     int num = 1;
     for(int i = 0; i < N; i++) {
@@ -57,5 +57,9 @@ int main(int argc, char *argv[]){
     }
 
     multiplyMatrix(N, matrix1, matrix2, result);
+    time = clock() - time;
+    cout << "Seconds: " << fixed << setprecision(4)
+        << ((float)time)/CLOCKS_PER_SEC << endl;
+
     return 0;
 }
