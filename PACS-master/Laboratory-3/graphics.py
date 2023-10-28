@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 x = [16, 128, 1024, 1048576, 4294967295]
-y = [25, 27, 45, 12838, 15344100]
+y = [11, 11, 16, 2831, 10471147]
 
 print(np.divide(y,x))
 
