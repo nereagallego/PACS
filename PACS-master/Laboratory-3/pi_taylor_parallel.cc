@@ -13,7 +13,19 @@ void
 pi_taylor_chunk(std::vector<my_float> &output,
         size_t thread_id, size_t start_step, size_t stop_step) {
 
+    my_float pi_chunk = 0.0;    
+    int sign;
 
+    if (start_step % 2 == 0) sign = 1;
+    else sign = -1;
+
+    for(size_t i=start_step; i<stop_step; i++){
+        pi_chunk += sign/(2.0*i+1.0);
+        sign = -sign;
+    }
+
+    pi_chunk *= 4;
+    output[thread_id] = pi_chunk;
 
 }
 
@@ -31,8 +43,8 @@ usage(int argc, const char *argv[]) {
     if (steps < threads ){
         std::cerr << "The number of steps should be larger than the number of threads" << std::endl;
         exit(1);
-
     }
+
     return std::make_pair(steps, threads);
 }
 
@@ -46,6 +58,20 @@ int main(int argc, const char *argv[]) {
     my_float pi;
 
     // please complete missing parts
+    std::vector<std::thread> pi_threads(threads);
+    std::vector<my_float> pi_chunks(threads);
+
+    for (size_t i = 0; i < threads; i++) {
+        size_t start_step = i * (steps / threads);
+        size_t stop_step = (i + 1) * (steps / threads);
+        pi_threads[i] = std::thread(pi_taylor_chunk, std::ref(pi_chunks), i, start_step, stop_step);
+    }
+
+    for (auto &t : pi_threads) {
+        t.join();
+    }
+
+    pi = std::accumulate(pi_chunks.begin(), pi_chunks.end(), 0.0);
 
 
     std::cout << "For " << steps << ", pi value: "

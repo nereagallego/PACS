@@ -8,9 +8,9 @@ using my_float = long double;
 
 my_float pi_taylor(size_t steps) 
 {
-    float pi = 0.0f;
+    my_float pi = 0.0f;
     int sign = 1;
-    for(int i=0; i<steps; i++){
+    for(size_t i=0; i<steps; i++){
         pi += sign/(2.0*i+1.0);
         sign = -sign;
     }
