@@ -58,7 +58,6 @@ int main(int argc, const char *argv[]) {
 
     my_float pi;
 
-    // please complete missing parts
     std::vector<std::thread> pi_threads(threads);
     std::vector<my_float> pi_chunks(threads);
 
@@ -72,6 +71,7 @@ int main(int argc, const char *argv[]) {
         t.join();
     }
 
+    // Final summation
     pi = std::accumulate(pi_chunks.begin(), pi_chunks.end(), 0.0);
 
     auto end = std::chrono::high_resolution_clock::now();
