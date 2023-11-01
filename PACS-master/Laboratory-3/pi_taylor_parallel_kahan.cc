@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-using my_float = long double;
+using my_float =long double;
 
 void
 pi_taylor_chunk(std::vector<my_float> &output,
@@ -49,13 +49,13 @@ usage(int argc, const char *argv[]) {
 }
 
 // Kahan summation algorithm
-float kahan_sum(std::vector<my_float> &input) {
-    float sum = 0.0;
-    float c = 0.0;
+my_float kahan_sum(std::vector<my_float> &input) {
+    my_float sum = 0.0;
+    my_float c = 0.0;
 
-    for (auto &x : input) {
-        float y = x - c;
-        float t = sum + y;
+    for (my_float &x : input) {
+        my_float y = x - c;
+        my_float t = sum + y;
         c = (t - sum) - y;
         sum = t;
     }
@@ -71,7 +71,7 @@ int main(int argc, const char *argv[]) {
     auto steps = ret_pair.first;
     auto threads = ret_pair.second;
 
-    float pi;
+    my_float pi;
 
     std::vector<std::thread> pi_threads(threads);
     std::vector<my_float> pi_chunks(threads);
