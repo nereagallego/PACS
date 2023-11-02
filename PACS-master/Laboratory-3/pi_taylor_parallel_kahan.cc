@@ -7,7 +7,22 @@
 #include <utility>
 #include <vector>
 
-using my_float =long double;
+using my_float = float;
+
+// Kahan summation algorithm
+my_float kahan_sum(std::vector<my_float> &input) {
+    my_float sum = 0.0;
+    my_float c = 0.0;
+
+    for (my_float &x : input) {
+        my_float y = x - c;
+        my_float t = sum + y;
+        c = (t - sum) - y;
+        sum = t;
+    }
+
+    return sum;
+}
 
 void
 pi_taylor_chunk(std::vector<my_float> &output,
@@ -19,12 +34,20 @@ pi_taylor_chunk(std::vector<my_float> &output,
     if (start_step % 2 == 0) sign = 1;
     else sign = -1;
 
+    my_float sum = 0.0;
+    my_float c = 0.0;
+
     for(size_t i=start_step; i<stop_step; i++){
-        pi_chunk += sign/(2.0*i+1.0);
+        my_float y = sign/(2.0*i+1.0) - c;
+        my_float t = sum + y;
+        c = (t - sum) - y;
+        sum = t;
+        // sum += sign/(2.0*i+1.0);
         sign = -sign;
     }
+    
 
-    pi_chunk *= 4;
+    pi_chunk = sum * 4;
     output[thread_id] = pi_chunk;
 
 }
@@ -48,21 +71,6 @@ usage(int argc, const char *argv[]) {
     return std::make_pair(steps, threads);
 }
 
-// Kahan summation algorithm
-my_float kahan_sum(std::vector<my_float> &input) {
-    my_float sum = 0.0;
-    my_float c = 0.0;
-
-    for (my_float &x : input) {
-        my_float y = x - c;
-        my_float t = sum + y;
-        c = (t - sum) - y;
-        sum = t;
-    }
-
-    return sum;
-}
-
 int main(int argc, const char *argv[]) {
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -76,10 +84,17 @@ int main(int argc, const char *argv[]) {
     std::vector<std::thread> pi_threads(threads);
     std::vector<my_float> pi_chunks(threads);
 
+    auto chunk_size = steps / threads;
+    size_t start_step = 0;
+    size_t stop_step = std::min(chunk_size, steps);
+
     for (size_t i = 0; i < threads; i++) {
-        size_t start_step = i * (steps / threads);
-        size_t stop_step = (i + 1) * (steps / threads);
+        if(i==threads-1 && stop_step < steps) stop_step=steps;
+
         pi_threads[i] = std::thread(pi_taylor_chunk, std::ref(pi_chunks), i, start_step, stop_step);
+        start_step = stop_step;
+        stop_step = std::min(stop_step+chunk_size,steps);
+        
     }
 
     for (auto &t : pi_threads) {

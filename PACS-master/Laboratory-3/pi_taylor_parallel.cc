@@ -61,10 +61,17 @@ int main(int argc, const char *argv[]) {
     std::vector<std::thread> pi_threads(threads);
     std::vector<my_float> pi_chunks(threads);
 
+    auto chunk_size = steps / threads;
+    size_t start_step = 0;
+    size_t stop_step = std::min(chunk_size, steps);
+
     for (size_t i = 0; i < threads; i++) {
-        size_t start_step = i * (steps / threads);
-        size_t stop_step = (i + 1) * (steps / threads);
+        if(i==threads-1 && stop_step < steps) stop_step=steps;
+
         pi_threads[i] = std::thread(pi_taylor_chunk, std::ref(pi_chunks), i, start_step, stop_step);
+        start_step = stop_step;
+        stop_step = std::min(stop_step+chunk_size,steps);
+        
     }
 
     for (auto &t : pi_threads) {
