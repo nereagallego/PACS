@@ -42,7 +42,6 @@ pi_taylor_chunk(std::vector<my_float> &output,
         my_float t = sum + y;
         c = (t - sum) - y;
         sum = t;
-        // sum += sign/(2.0*i+1.0);
         sign = -sign;
     }
     
