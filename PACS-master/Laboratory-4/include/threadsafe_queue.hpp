@@ -9,7 +9,7 @@ template<typename T>
 class threadsafe_queue
 {
   private:
-    std::mutex mut;
+    mutable std::mutex mut;
     std::queue<T> data_queue;
     std::condition_variable data_cond;
 
@@ -37,7 +37,8 @@ class threadsafe_queue
         std::lock_guard<std::mutex> lk(mut);
         if(data_queue.empty())
             return false;
-        value = data_queue.pop();
+        value = data_queue.front();
+        data_queue.pop();
         return true;
     }
 
@@ -45,8 +46,8 @@ class threadsafe_queue
     {
         std::unique_lock<std::mutex> lk(mut);
         data_cond.wait(lk, [this]{return !data_queue.empty();});
-        value = data_queue.pop();
-        
+        value = data_queue.front();
+        data_queue.pop();
     }
 
     std::shared_ptr<T> wait_and_pop()
