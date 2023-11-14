@@ -1,0 +1,10 @@
+Execution time by tiles (8x8): 135094 ms.
+Execution time by tiles (8x8): 160452 ms.
+Execution time by tiles (8x8): 215516 ms.
+Execution time by tiles (8x8): 197276 ms.
+Execution time by tiles (8x8): 199589 ms.
+Execution time by tiles (8x8): 209336 ms.
+Execution time by tiles (8x8): 195598 ms.
+Execution time by tiles (8x8): 171400 ms.
+Execution time by tiles (8x8): 208039 ms.
+Execution time by tiles (8x8): 210339 ms.
