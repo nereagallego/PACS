@@ -267,11 +267,8 @@ int main(int argc, char *argv[]){
     // wait for all tasks to complete and destroy the thread pool
     pool->~thread_pool();
 
-    // std::cout << "hey" << std::endl;
-    
-
     auto stop = std::chrono::steady_clock::now();
-    std::cout << "Execution time by rows: " <<
+    std::cout << "Execution time (" << w_div << " x " << h_div << "): " <<
     std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
 
     

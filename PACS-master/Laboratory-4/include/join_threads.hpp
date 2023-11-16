@@ -16,6 +16,7 @@ class join_threads
     for(auto& t: _threads) {
       if(t.joinable()) {
         t.join();
+        // std::cout << "Thread joined" << std::endl;
       }
     }
   }
