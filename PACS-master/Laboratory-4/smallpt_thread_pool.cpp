@@ -212,7 +212,7 @@ usage(int argc, char *argv[], size_t w, size_t h) {
     size_t w_div = argc == 1 ? 2 : std::stol(argv[1]);
     size_t h_div = argc == 1 ? 2 : std::stol(argv[2]);
 
-    if (((w/w_div) < 4) and ((h/h_div) < 4)){
+    if (((w/w_div) < 4) || ((h/h_div) < 4)){
         std::cerr << "The minimum region width and height is 4" << std::endl;
         exit(1);
     }
@@ -243,106 +243,68 @@ int main(int argc, char *argv[]){
 
     auto start = std::chrono::steady_clock::now();
 
+    // TEST
+
 
     auto *c_ptr = c.get(); // raw pointer to Vector c
 
-    if(argc == 1)
-    {
-        // create a thread pool
-        thread_pool *pool = new thread_pool({w_div * h_div});
+    // create a thread pool
+    thread_pool *pool = new thread_pool({w_div * h_div});
 
-        // launch the tasks by rows
-        for (size_t i=0; i<w_div; i++) {
-            for (size_t j=0; j<h_div; j++) {
-                auto x0 = i * w / w_div;
-                auto x1 = (i + 1) * w / w_div;
-                auto y0 = j * h / h_div;
-                auto y1 = (j + 1) * h / h_div;
-                pool->submit([=] {
-                    render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
-                });
-            }
+    // launch the tasks by rows
+    for (size_t i=0; i<w_div; i++) {
+        for (size_t j=0; j<h_div; j++) {
+            auto x0 = i * w / w_div;
+            auto x1 = (i + 1) * w / w_div;
+            auto y0 = j * h / h_div;
+            auto y1 = (j + 1) * h / h_div;
+            pool->submit([=] {
+                render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
+            });
         }
-
-        // wait for all tasks to complete
-        pool->wait();
-
-        // destroy the thread pool
-        pool->~thread_pool();
-
-        auto stop = std::chrono::steady_clock::now();
-        std::cout << "Execution time by rows: " <<
-        std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
-    
-        
-        
-        
-        start = std::chrono::steady_clock::now();
-
-        c_ptr = c.get(); // raw pointer to Vector c
-        // create a thread pool
-        thread_pool *pool2 = new thread_pool({w_div * h_div});
-
-        // launch the tasks by columns
-        for (size_t i=0; i<w_div; i++) {
-            for (size_t j=0; j<h_div; j++) {
-                auto x0 = i * w / w_div;
-                auto x1 = (i + 1) * w / w_div;
-                auto y0 = j * h / h_div;
-                auto y1 = (j + 1) * h / h_div;
-                pool2->submit([=] {
-                    render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
-                });
-            }
-        }
-
-        // wait for all tasks to complete
-        pool2->wait();
-
-        // destroy the thread pool
-        pool2->~thread_pool();
-
-        stop = std::chrono::steady_clock::now();
-        std::cout << "Execution time by columns: " <<
-        std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
-
-    } else {
-        size_t blocks_w = size_t(w/w_div);
-        size_t blocks_h = size_t(h/h_div);
-        if (w % w_div != 0) {
-            std::cout << "Warning: width is not divisible by " << w_div << std::endl;
-        }
-
-        if (h % h_div != 0) {
-            std::cout << "Warning: height is not divisible by " << h_div << std::endl;
-        }
-
-        // create a thread pool
-        thread_pool *pool = new thread_pool({blocks_w * blocks_h});
-
-        // launch the tasks by tiles
-        for (size_t i=0; i<blocks_w; i++) {
-            for (size_t j=0; j<blocks_h; j++) {
-                auto x0 = i * w_div;
-                auto x1 = (i + 1) * w_div;
-                auto y0 = j * h_div;
-                auto y1 = (j + 1) * h_div;
-                pool->submit([=] {
-                    render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
-                });
-            }
-        }
-
-
-        // wait for completion
-        pool->wait();	// wait for all tasks to complete
-        // destroy the thread pool
-        pool->~thread_pool();
-
-        auto stop = std::chrono::steady_clock::now();
-        std::cout << "Execution time by tiles (" << w_div << "x" << h_div << "): " << 
-        std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
     }
 
+    // wait for all tasks to complete and destroy the thread pool
+    pool->~thread_pool();
+
+    // std::cout << "hey" << std::endl;
+    
+
+    auto stop = std::chrono::steady_clock::now();
+    std::cout << "Execution time by rows: " <<
+    std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
+
+    
+    
+    // start = std::chrono::steady_clock::now();
+
+    // c_ptr = c.get(); // raw pointer to Vector c
+    // // create a thread pool
+    // thread_pool *pool2 = new thread_pool({w_div * h_div});
+
+    // // launch the tasks by columns
+    // for (size_t i=0; i<w_div; i++) {
+    //     for (size_t j=0; j<h_div; j++) {
+    //         auto x0 = i * w / w_div;
+    //         auto x1 = (i + 1) * w / w_div;
+    //         auto y0 = j * h / h_div;
+    //         auto y1 = (j + 1) * h / h_div;
+    //         pool2->submit([=] {
+    //             render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
+    //         });
+    //     }
+    // }
+
+    // // wait for all tasks to complete
+    // pool2->wait();
+
+    // // destroy the thread pool
+    // pool2->~thread_pool();
+
+    // stop = std::chrono::steady_clock::now();
+    // std::cout << "Execution time by columns: " <<
+    // std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
+
+    
     write_output_file(c, w, h);
 }

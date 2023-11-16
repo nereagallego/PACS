@@ -35,7 +35,7 @@ class thread_pool
 
   public:
   thread_pool(size_t num_threads = std::thread::hardware_concurrency())
-    : _done(false), _num_threads(num_threads), _joiner(_threads)
+    : _done(false), _num_threads(num_threads), _work_queue(), _joiner(_threads)
   {
     try
     {
@@ -53,6 +53,7 @@ class thread_pool
 
   ~thread_pool()
   {
+    wait();
     _done = true;
   }
 

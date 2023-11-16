@@ -1,40 +1,7 @@
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 8 8
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 4 4 
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 2 2
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
-./smallpt_thread_pool 1 1 
+for i in 1 2 4 8 16 32 64 128
+do
+  for j in {1..10}
+  do
+    ./smallpt_thread_pool $i $i
+  done
+done
