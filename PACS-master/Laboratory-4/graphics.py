@@ -38,15 +38,15 @@ x = ["rows", "cols", "1x1", "2x2", "4x4", "8x8", "16x16", "32x32", "64x64", "128
 mean = [mean_rows, mean_cols, mean_1, mean_2, mean_4, mean_8, mean_16, mean_32, mean_64, mean_128]
 dev = [dev_rows, dev_cols, dev_1, dev_2, dev_4, dev_8, dev_16, dev_32, dev_64, dev_128]
 # Coefficient of variation
-cv = [100*dev_rows/mean_rows, 100*dev_cols/mean_cols, 100*dev_1/mean_1, 100*dev_2/mean_2, 100*dev_4/mean_4, 100*dev_8/mean_8, 100*dev_16/mean_16, 100*dev_32/mean_32, 100*dev_64/mean_64, 100*dev_128/mean_128]
+cv = [dev_rows/mean_rows, dev_cols/mean_cols, dev_1/mean_1, dev_2/mean_2, dev_4/mean_4, dev_8/mean_8, dev_16/mean_16, dev_32/mean_32, dev_64/mean_64, dev_128/mean_128]
 
-plt.bar(x, mean)
+plt.bar(x, cv)
 
 # Adding labels and title
 plt.xlabel('Configuration')
-plt.ylabel('time (ms)')
-plt.title('')
-plt.yscale('log')
+# plt.ylabel('time (ms)')
+plt.title('Coefficient of variation')
+# plt.yscale('log')
 plt.xticks(rotation=45, ha='right')
 
 # Display the plot
