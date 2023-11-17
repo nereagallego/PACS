@@ -248,59 +248,66 @@ int main(int argc, char *argv[]){
 
     auto *c_ptr = c.get(); // raw pointer to Vector c
 
-    // create a thread pool
-    thread_pool *pool = new thread_pool({w_div * h_div});
+    if (argc == 1) {
+        // create a thread pool
+        thread_pool *pool = new thread_pool({h});
 
-    // launch the tasks by rows
-    for (size_t i=0; i<w_div; i++) {
-        for (size_t j=0; j<h_div; j++) {
-            auto x0 = i * w / w_div;
-            auto x1 = (i + 1) * w / w_div;
-            auto y0 = j * h / h_div;
-            auto y1 = (j + 1) * h / h_div;
+        // launch the tasks by rows
+        for (size_t i=0; i<h; i++) {
             pool->submit([=] {
-                render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
+                render(w, h, samps, cam, cx, cy, c_ptr, Region(0, w, i, i+1));
             });
         }
+
+        // wait for all tasks to complete and destroy the thread pool
+        pool->~thread_pool();
+
+        auto stop = std::chrono::steady_clock::now();
+        std::cout << "Execution time (by rows): " <<
+        std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
+
+        // create a thread pool
+        thread_pool *pool2 = new thread_pool({w});
+
+        // launch the tasks by columns
+        for (size_t i=0; i<w; i++) {
+            pool2->submit([=] {
+                render(w, h, samps, cam, cx, cy, c_ptr, Region(i, i+1, 0, h));
+            });
+        }
+
+        // wait for all tasks to complete and destroy the thread pool
+        pool2->~thread_pool();
+
+        stop = std::chrono::steady_clock::now();
+        std::cout << "Execution time (by columns): " <<
+        std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
+        
+
+    } else {
+        // create a thread pool
+        thread_pool *pool = new thread_pool({w_div * h_div});
+
+        // launch the tasks by tiles
+        for (size_t i=0; i<w_div; i++) {
+            for (size_t j=0; j<h_div; j++) {
+                auto x0 = i * w / w_div;
+                auto x1 = (i + 1) * w / w_div;
+                auto y0 = j * h / h_div;
+                auto y1 = (j + 1) * h / h_div;
+                pool->submit([=] {
+                    render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
+                });
+            }
+        }
+
+        // wait for all tasks to complete and destroy the thread pool
+        pool->~thread_pool();
+
+        auto stop = std::chrono::steady_clock::now();
+        std::cout << "Execution time (" << w_div << " x " << h_div << "): " <<
+        std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
     }
-
-    // wait for all tasks to complete and destroy the thread pool
-    pool->~thread_pool();
-
-    auto stop = std::chrono::steady_clock::now();
-    std::cout << "Execution time (" << w_div << " x " << h_div << "): " <<
-    std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
-
-    
-    
-    // start = std::chrono::steady_clock::now();
-
-    // c_ptr = c.get(); // raw pointer to Vector c
-    // // create a thread pool
-    // thread_pool *pool2 = new thread_pool({w_div * h_div});
-
-    // // launch the tasks by columns
-    // for (size_t i=0; i<w_div; i++) {
-    //     for (size_t j=0; j<h_div; j++) {
-    //         auto x0 = i * w / w_div;
-    //         auto x1 = (i + 1) * w / w_div;
-    //         auto y0 = j * h / h_div;
-    //         auto y1 = (j + 1) * h / h_div;
-    //         pool2->submit([=] {
-    //             render(w, h, samps, cam, cx, cy, c_ptr, Region(x0, x1, y0, y1));
-    //         });
-    //     }
-    // }
-
-    // // wait for all tasks to complete
-    // pool2->wait();
-
-    // // destroy the thread pool
-    // pool2->~thread_pool();
-
-    // stop = std::chrono::steady_clock::now();
-    // std::cout << "Execution time by columns: " <<
-    // std::chrono::duration_cast<std::chrono::milliseconds>(stop-start).count() << " ms." << std::endl;
 
     
     write_output_file(c, w, h);

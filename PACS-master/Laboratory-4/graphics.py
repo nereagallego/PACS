@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-ex_rows = [1]
-ex_cols = [1]
+ex_rows = [1282, 1146, 2221, 1217, 1408, 1473, 1371, 868, 1287, 969]
+ex_cols = [3160, 3063, 4036, 2661, 3130, 2635, 2748, 2548, 3032, 3183]
 ex_1 = [6478, 6447, 6466, 6440, 6446, 6445, 6581, 6468, 6535, 6453]
 ex_2 = [2027, 2031, 2014, 2034, 2035, 2039, 2033, 2045, 2138, 2121]
 ex_4 = [1078, 963, 1046, 958, 865, 1045, 953, 941, 968, 1018]
@@ -40,13 +40,13 @@ dev = [dev_rows, dev_cols, dev_1, dev_2, dev_4, dev_8, dev_16, dev_32, dev_64, d
 # Coefficient of variation
 cv = [100*dev_rows/mean_rows, 100*dev_cols/mean_cols, 100*dev_1/mean_1, 100*dev_2/mean_2, 100*dev_4/mean_4, 100*dev_8/mean_8, 100*dev_16/mean_16, 100*dev_32/mean_32, 100*dev_64/mean_64, 100*dev_128/mean_128]
 
-plt.bar(x, cv)
+plt.bar(x, mean)
 
 # Adding labels and title
 plt.xlabel('Configuration')
 plt.ylabel('time (ms)')
 plt.title('')
-# plt.yscale('log')
+plt.yscale('log')
 plt.xticks(rotation=45, ha='right')
 
 # Display the plot
