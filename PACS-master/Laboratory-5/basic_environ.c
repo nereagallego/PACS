@@ -194,6 +194,7 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to create memory buffer at device\n");
   cl_mem out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * count, NULL, &err);
   cl_error(err, "Failed to create memory buffer at device\n");
+  
   // Write date into the memory object 
   err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(float) * count,
                             input, 0, NULL, NULL);
@@ -209,7 +210,7 @@ int main(int argc, char** argv)
 
   // Launch Kernel
   local_size = 128;
-  global_size = ceil(count/(float)local_size) * local_size; // global size must be multiple of local size
+  global_size = ceil(count / (float)local_size) * local_size; // global size must be multiple of local size
   printf("Local size: %d\n", local_size);
   printf("Global size: %d\n", global_size);
   err = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);

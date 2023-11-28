@@ -5,7 +5,8 @@
 //
 // 
 ////////////////////////////////////////////////////////////////////
-
+#define cimg_use_jpeg
+#include "CImg.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +20,8 @@
 #else
   #include <CL/cl.h>
 #endif
+
+using namespace cimg_library;
   
 // check error, in such a case, it exits
 
@@ -181,6 +184,57 @@ int main(int argc, char** argv)
   printf("Kernel created\n");
 
   // Create and initialize the input and output arrays at the host memory
+  CImg<unsigned char> image("lenna.png");
+
+  // Create OpenCL image memory objects
+  cl_image_format format;
+  format.image_channel_order = CL_RGBA;
+  format.image_channel_data_type = CL_UNSIGNED_INT8;
+
+  cl_image_desc desc;
+  desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+  desc.image_width = image.width();
+  desc.image_height = image.height();
+  desc.image_depth = 0;
+  desc.image_array_size = 0;
+  desc.image_row_pitch = 0;
+  desc.image_slice_pitch = 0;
+  desc.num_mip_levels = 0;
+  desc.num_samples = 0;
+  desc.buffer = NULL;
+
+  cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
+  cl_error(err, "Failed to create memory image at device\n");
+  cl_mem out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
+  cl_error(err, "Failed to create memory image at device\n");
+
+  // Write data into the memory object
+  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, image.size(),
+                            image.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to enqueue a write command\n");
+
+  // Set the arguments to the kernel
+  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
+  cl_error(err, "Failed to set argument 0\n");
+  // err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
+  // cl_error(err, "Failed to set argument 1\n");
+
+  // Launch kernel
+  local_size = 128;
+  global_size = ceil(image.size() / (float)local_size) * local_size;
+  printf("Local size: %d\n", local_size);
+  printf("Global size: %d\n", global_size);
+  err = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+  cl_error(err, "Failed to launch kernel to the device\n");
+
+  // Read data from device memory to host memory
+  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0, image.size(),
+                           image.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to enqueue a read command\n\n");
+
+  // Display the image
+  image.display("Image flip");
+
 
 
   // Release OpenCL resources
