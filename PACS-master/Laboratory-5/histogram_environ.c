@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////
-//File: basic_environ.c
+//File: histogram_environ.c
 //
-//Description: base file for environment exercises with openCL
+//Description: histogram using OpenCL
 //
 // 
 ////////////////////////////////////////////////////////////////////
@@ -143,7 +143,7 @@ int main(int argc, char** argv)
   printf("Command queue created\n");
 
   // Calculate size of the file
-  FILE *fileHandler = fopen("kernel.cl", "r");
+  FILE *fileHandler = fopen("histogram.cl", "r");
   if (fileHandler == NULL){
     printf("Failed to open kernel file\n");
     exit(-1);
@@ -176,59 +176,15 @@ int main(int argc, char** argv)
   }
 
   // Create a compute kernel with the program we want to run
-  cl_kernel kernel = clCreateKernel(program, "pow_of_two", &err);
+  cl_kernel kernel = clCreateKernel(program, "histogram,", &err);
   cl_error(err, "Failed to create kernel from the program\n");
   printf("Kernel created\n");
 
   // Create and initialize the input and output arrays at the host memory
-  unsigned int count = 10000;
-  float input[count];
-  float output[count];
-  for (int i = 0; i < count; i++){
-    input[i] = i;
-    output[i] = 0;
-  }
 
-  // Create OpenCL buffer visible to the OpenCl runtime
-  cl_mem in_device_object  = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(float) * count, NULL, &err);
-  cl_error(err, "Failed to create memory buffer at device\n");
-  cl_mem out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * count, NULL, &err);
-  cl_error(err, "Failed to create memory buffer at device\n");
-  // Write date into the memory object 
-  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(float) * count,
-                            input, 0, NULL, NULL);
-  cl_error(err, "Failed to enqueue a write command\n");
-
-  // Set the arguments to the kernel
-  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
-  cl_error(err, "Failed to set argument 0\n");
-  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
-  cl_error(err, "Failed to set argument 1\n");
-  err = clSetKernelArg(kernel, 2, sizeof(unsigned int), &count);
-  cl_error(err, "Failed to set argument 2\n");
-
-  // Launch Kernel
-  local_size = 128;
-  global_size = ceil(count/(float)local_size) * local_size; // global size must be multiple of local size
-  printf("Local size: %d\n", local_size);
-  printf("Global size: %d\n", global_size);
-  err = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
-  cl_error(err, "Failed to launch kernel to the device\n");
-
-  // Read data form device memory back to host memory
-  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0, sizeof(float) * count, output, 0, NULL, NULL);
-  cl_error(err, "Failed to enqueue a read command\n\n");
-
-  // Write code to check the correctness of the results. Only the 50 first results are printed
-  printf("Checking correctness for the 50 first results...\n");
-  size_t nprints = count < 50 ? count : 50;
-  for (int i = 0; i < nprints; i++){
-    printf("%.2f\n", output[i]);
-  }
 
   // Release OpenCL resources
-  clReleaseMemObject(in_device_object);
-  clReleaseMemObject(out_device_object);
+
   clReleaseProgram(program);
   clReleaseKernel(kernel);
   clReleaseCommandQueue(command_queue);
