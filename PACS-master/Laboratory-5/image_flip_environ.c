@@ -40,7 +40,7 @@ int main(int argc, char** argv)
   char str_buffer[t_buf];		// auxiliary buffer	
   size_t e_buf;				// effective size of str_buffer in use
 	    
-  size_t global_size;                      	// global domain size for our calculation
+                        	// global domain size for our calculation
   size_t local_size;                       	// local domain size for our calculation
 
   const cl_uint num_platforms_ids = 10;				// max of allocatable platforms
@@ -121,6 +121,11 @@ int main(int argc, char** argv)
       err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_work_group_size), &max_work_group_size, NULL);
       cl_error(err, "clGetDeviceInfo: Getting device max work group size");
       printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_GROUP_SIZE: %d\n", i, 0, max_work_group_size);
+
+      size_t max_work_item_dimensions;
+      err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(max_work_item_dimensions), &max_work_item_dimensions, NULL);
+      cl_error(err, "clGetDeviceInfo: Getting device max work item dimensions");
+      printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS: %d\n", i, 0, max_work_item_dimensions);
 
       // print the profiling timer resolution
       size_t profiling_timer_resolution;
@@ -208,32 +213,45 @@ int main(int argc, char** argv)
   cl_mem out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
   cl_error(err, "Failed to create memory image at device\n");
 
+  // imaage size
+  printf("Image size: %d\n", image.size());
+
+  const size_t origin[3] = {0, 0, 0};
+  const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
-  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, image.size(),
-                            image.data(), 0, NULL, NULL);
+  err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
+                            origin, region, sizeof(unsigned char) * image.width(), 
+                            0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
+ // Create and initialize the input and output arrays at the host memory
 
   // Set the arguments to the kernel
   err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
   cl_error(err, "Failed to set argument 0\n");
-  // err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
-  // cl_error(err, "Failed to set argument 1\n");
+  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
+  cl_error(err, "Failed to set argument 1\n");
 
   // Launch kernel
-  local_size = 128;
-  global_size = ceil(image.size() / (float)local_size) * local_size;
+  // local_size = 64;
+  const size_t global_size[2] = {image.width() , image.height()};
+  // NDRange kernel launch = 2D grid of work items
   printf("Local size: %d\n", local_size);
   printf("Global size: %d\n", global_size);
-  err = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
+  printf("Kernel launched\n");
+
+  CImg<unsigned char> image_out(image.width(), image.height(), 1, 4, 0);
 
   // Read data from device memory to host memory
-  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0, image.size(),
-                           image.data(), 0, NULL, NULL);
+  err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
+                            origin, region, sizeof(unsigned char) * image.width(), 
+                            0, image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
+  printf("Data read from device\n");
 
   // Display the image
-  image.display("Image flip");
+  image_out.display("Image flip");
 
 
 
