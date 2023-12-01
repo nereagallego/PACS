@@ -8,6 +8,7 @@ __kernel void image_flip(
   
   // Read the pixel from the original image
   uint4 pixel = read_imageui(inputImage, gid);
+  // printf("pixel.r = %d, pixel.g = %d, pixel.b = %d, pixel.a = %d\n", pixel.x, pixel.y, pixel.z, pixel.w);
   // printf("pixel.x = %d, pixel.y = %d, pixel.z = %d, pixel.w = %d\n", pixel.x, pixel.y, pixel.z, pixel.w);
 
   // Calculate the corresponding index for the vertically flipped pixel

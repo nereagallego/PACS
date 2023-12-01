@@ -220,7 +220,7 @@ int main(int argc, char** argv)
   const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
   err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
-                            origin, region, sizeof(unsigned char) * image.width(), 
+                            origin, region, sizeof(unsigned char) * image.width()*4, 
                             0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
  // Create and initialize the input and output arrays at the host memory
@@ -245,7 +245,7 @@ int main(int argc, char** argv)
 
   // Read data from device memory to host memory
   err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
-                            origin, region, sizeof(unsigned char) * image.width(), 
+                            origin, region, sizeof(unsigned char) * image.width()*4, 
                             0, image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
