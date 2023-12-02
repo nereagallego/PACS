@@ -1,16 +1,15 @@
-__kernel void calculateHistogram(__read_only image2d_t inputImage,
+__kernel void histogram(__read_only image2d_t inputImage,
                                  __global uint *redHistogram,
                                  __global uint *greenHistogram,
                                  __global uint *blueHistogram) {
 
-    const int x = get_global_id(0);
-    const int y = get_global_id(1);
+    const int2 gid = (int2)(get_global_id(0), get_global_id(1));
     int width = get_image_width(inputImage);
     int height = get_image_height(inputImage);
 
-    if (x < width && y < height) {
-        int4 pixel = read_imagei(inputImage, CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE, (int2)(x, y));
-
+    if (gid[0] < width && gid[1] < height) {
+        uint4 pixel = read_imageui(inputImage, gid);
+        
         // Extracting individual color channels
         uint red = pixel.x;
         uint green = pixel.y;

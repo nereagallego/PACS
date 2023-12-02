@@ -32,6 +32,49 @@ void cl_error(cl_int code, const char *string){
 	    exit(-1);
 	}
 }
+
+void plotHistogram(const std::vector<unsigned int>& redHistogram,
+                   const std::vector<unsigned int>& greenHistogram,
+                   const std::vector<unsigned int>& blueHistogram) {
+
+const int histogramSize = redHistogram.size();
+    const int histWidth = 2; // Width of each histogram bar
+    const int histHeight = 400; // Height of histogram image
+    const int margin = 40; // Margin between histograms and window edge
+    const int imageSize = histogramSize * histWidth + 2 * margin;
+
+    // Create a new image to display histograms
+    CImg<unsigned char> histImage(imageSize, histHeight + 2 * margin, 1, 3, 255);
+
+    // Define colors
+    const unsigned char red[] = {255, 0, 0};
+    const unsigned char green[] = {0, 255, 0};
+    const unsigned char blue[] = {0, 0, 255};
+
+    // Plot red histogram
+    for (int i = 0; i < histogramSize; ++i) {
+        const int redHeight = histHeight * redHistogram[i] / (*std::max_element(redHistogram.begin(), redHistogram.end()));
+        histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - redHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, red);
+    }
+
+    // Plot green histogram
+    for (int i = 0; i < histogramSize; ++i) {
+        const int greenHeight = histHeight * greenHistogram[i] / (*std::max_element(greenHistogram.begin(), greenHistogram.end()));
+        histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - greenHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, green);
+    }
+
+    // Plot blue histogram
+    for (int i = 0; i < histogramSize; ++i) {
+        const int blueHeight = histHeight * blueHistogram[i] / (*std::max_element(blueHistogram.begin(), blueHistogram.end()));
+        histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - blueHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, blue);
+    }
+
+    // Display histogram image
+    CImgDisplay disp(histImage, "RGB Histograms");
+    while (!disp.is_closed()) {
+        disp.wait();
+    }
+}
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv)
@@ -184,7 +227,7 @@ int main(int argc, char** argv)
   printf("Kernel created\n");
 
   // Create and initialize the input and output arrays at the host memory
-  CImg<unsigned char> image("lenna.jpg");
+  CImg<unsigned char> image("lenna.png");
   
   // Create OpenCl image memory objects
   cl_image_format format;
@@ -207,22 +250,22 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to create input image memory object\n");
   // Create OpenCL buffers for histograms
   const int histogramSize = 256;
-  std::vector<uint32_t> redHistogram(histogramSize, 0);
-  std::vector<uint32_t> greenHistogram(histogramSize, 0);
-  std::vector<uint32_t> blueHistogram(histogramSize, 0);
+  std::vector<unsigned int> redHistogram(histogramSize, 0);
+  std::vector<unsigned int> greenHistogram(histogramSize, 0);
+  std::vector<unsigned int> blueHistogram(histogramSize, 0);
 
-  cl_mem redBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint32_t) * histogramSize, redHistogram.data(), &err);
+  cl_mem redBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int) * histogramSize, redHistogram.data(), &err);
   cl_error(err, "Failed to create red histogram buffer\n");
-  cl_mem greenBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint32_t) * histogramSize, greenHistogram.data(), &err);
+  cl_mem greenBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int) * histogramSize, greenHistogram.data(), &err);
   cl_error(err, "Failed to create green histogram buffer\n");
-  cl_mem blueBuffer=clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint32_t) * histogramSize, blueHistogram.data(), &err);
+  cl_mem blueBuffer=clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int) * histogramSize, blueHistogram.data(), &err);
   cl_error(err, "Failed to create blue histogram buffer\n");
 
   const size_t origin[3] = {0, 0, 0};
   const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
   err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, origin,
-                            region, 0, 0, sizeof(unsigned char) * image.width()*4, 0, image.data(), 0, NULL, NULL);
+                            region, sizeof(unsigned char) * image.width()*4, 0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
 
   // Set the arguments to our compute kernel
@@ -243,38 +286,26 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  err = clEnqueueReadBuffer(command_queue, redBuffer, CL_TRUE, 0, sizeof(uint32_t) *
+  err = clEnqueueReadBuffer(command_queue, redBuffer, CL_TRUE, 0, sizeof(unsigned int) *
                             histogramSize, redHistogram.data(), 0, NULL, NULL);
   cl_error(err, "Failed to read red histogram from the device\n");
-  err = clEnqueueReadBuffer(command_queue, greenBuffer, CL_TRUE, 0, sizeof(uint32_t) 
+  err = clEnqueueReadBuffer(command_queue, greenBuffer, CL_TRUE, 0, sizeof(unsigned int) 
                             * histogramSize, greenHistogram.data(), 0, NULL, NULL);
   cl_error(err, "Failed to read green histogram from the device\n");
-  err = clEnqueueReadBuffer(command_queue, blueBuffer, CL_TRUE, 0, sizeof(uint32_t) *
+  err = clEnqueueReadBuffer(command_queue, blueBuffer, CL_TRUE, 0, sizeof(unsigned int) *
                             histogramSize, blueHistogram.data(), 0, NULL, NULL);
   cl_error(err, "Failed to read blue histogram from the device\n");
   printf("Data read from device\n");
 
-  CImg<unsigned char> histImage(800, 600, 1, 3, 0);
-  histImage.fill(255);
-
-  std::vector<float> redHistogramChar(redHistogram.begin(), redHistogram.end());
-  std::vector<float> greenHistogramChar(greenHistogram.begin(), greenHistogram.end());
-  std::vector<float> blueHistogramChar(blueHistogram.begin(), blueHistogram.end());
-
-  // Plot the red histogram
-  histImage.draw_graph(redHistogramChar.data(), histogramSize, 1, 0, 0, 255, 0, 1, 1);
-
-  // Plot the green histogram
-  histImage.draw_graph(greenHistogramChar.data(), histogramSize, 1, 0, 0, 0, 255, 1, 1);
-
-  // Plot the blue histogram
-  histImage.draw_graph(blueHistogramChar.data(), histogramSize, 1, 0, 0, 0, 0, 255, 1);
-  
-  // Display the histogram image
-  CImgDisplay disp(histImage, "Histograms");
-  while (!disp.is_closed()) {
-      disp.wait();
+  // Print histograms
+  for (int i = 0; i < histogramSize; i++){
+    printf("Red[%d]: %d\n", i, redHistogram[i]);
+    printf("Green[%d]: %d\n", i, greenHistogram[i]);
+    printf("Blue[%d]: %d\n", i, blueHistogram[i]);
   }
+
+  // Plot histograms
+  plotHistogram(redHistogram, greenHistogram, blueHistogram);
 
   // Release OpenCL resources
 
