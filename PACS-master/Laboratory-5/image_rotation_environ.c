@@ -1,11 +1,12 @@
 ////////////////////////////////////////////////////////////////////
-//File: image_rotation_environ.c
+//File: image_flip_environ.c
 //
-//Description: image rotation using OpenCL
+//Description: image flip using OpenCL
 //
 // 
 ////////////////////////////////////////////////////////////////////
-
+#define cimg_use_jpeg
+#include "CImg.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +20,8 @@
 #else
   #include <CL/cl.h>
 #endif
+
+using namespace cimg_library;
   
 // check error, in such a case, it exits
 
@@ -37,7 +40,7 @@ int main(int argc, char** argv)
   char str_buffer[t_buf];		// auxiliary buffer	
   size_t e_buf;				// effective size of str_buffer in use
 	    
-  size_t global_size;                      	// global domain size for our calculation
+                        	// global domain size for our calculation
   size_t local_size;                       	// local domain size for our calculation
 
   const cl_uint num_platforms_ids = 10;				// max of allocatable platforms
@@ -119,6 +122,11 @@ int main(int argc, char** argv)
       cl_error(err, "clGetDeviceInfo: Getting device max work group size");
       printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_GROUP_SIZE: %d\n", i, 0, max_work_group_size);
 
+      size_t max_work_item_dimensions;
+      err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(max_work_item_dimensions), &max_work_item_dimensions, NULL);
+      cl_error(err, "clGetDeviceInfo: Getting device max work item dimensions");
+      printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS: %d\n", i, 0, max_work_item_dimensions);
+
       // print the profiling timer resolution
       size_t profiling_timer_resolution;
       err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(profiling_timer_resolution), &profiling_timer_resolution, NULL);
@@ -128,7 +136,11 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
-
+  // Check if rotation angle is given
+  if (argc < 2){
+    printf("Usage: %s <angle>\n", argv[0]);
+    exit(-1);
+  }
 
   // 3. Create a context, with a device
   cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[0], 0 };
@@ -176,11 +188,81 @@ int main(int argc, char** argv)
   }
 
   // Create a compute kernel with the program we want to run
-  cl_kernel kernel = clCreateKernel(program, "image_rotation,", &err);
+  cl_kernel kernel = clCreateKernel(program, "image_rotation", &err);
   cl_error(err, "Failed to create kernel from the program\n");
   printf("Kernel created\n");
 
-  // Create and initialize the input and output arrays at the host memory
+  // Create and initialize the input image
+  CImg<unsigned char> image("lenna.png");
+
+  // Get angle from user and convert to radians
+  float angle = atof(argv[1]);
+  float angle_radians = angle * M_PI / 180.0;
+  printf("Angle: %f\n", angle_radians);
+
+  // Create OpenCL image memory objects
+  cl_image_format format;
+  format.image_channel_order = CL_RGBA;
+  format.image_channel_data_type = CL_UNSIGNED_INT8;
+
+  cl_image_desc desc;
+  desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+  desc.image_width = image.width();
+  desc.image_height = image.height();
+  desc.image_depth = 0;
+  desc.image_array_size = 0;
+  desc.image_row_pitch = 0;
+  desc.image_slice_pitch = 0;
+  desc.num_mip_levels = 0;
+  desc.num_samples = 0;
+  desc.buffer = NULL;
+
+  cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
+  cl_error(err, "Failed to create memory image at device\n");
+  cl_mem out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
+  cl_error(err, "Failed to create memory image at device\n");
+
+  // imaage size
+  printf("Image size: %d\n", image.size());
+
+  const size_t origin[3] = {0, 0, 0};
+  const size_t region[3] = {image.width(), image.height(), 1};
+  // Write data into the memory object
+  err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
+                            origin, region, sizeof(unsigned char) * image.width()*4, 
+                            0, image.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to enqueue a write command\n");
+ // Create and initialize the input and output arrays at the host memory
+
+  // Set the arguments to the kernel
+  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
+  cl_error(err, "Failed to set argument 0\n");
+  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
+  cl_error(err, "Failed to set argument 1\n");
+  err = clSetKernelArg(kernel, 2, sizeof(float), &angle_radians);
+
+  // Launch kernel
+  // local_size = 64;
+  const size_t global_size[2] = {image.width() , image.height()};
+  // NDRange kernel launch = 2D grid of work items
+  printf("Local size: %d\n", local_size);
+  printf("Global size: %d\n", global_size);
+  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
+  cl_error(err, "Failed to launch kernel to the device\n");
+  printf("Kernel launched\n");
+
+  CImg<unsigned char> image_out(image.width(), image.height(), 1, 4, 0);
+
+  // Read data from device memory to host memory
+  err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
+                            origin, region, sizeof(unsigned char) * image.width()*4, 
+                            0, image_out.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to enqueue a read command\n\n");
+  printf("Data read from device\n");
+
+  // Display the image
+  image_out.display("Image rotation");
+
 
 
   // Release OpenCL resources

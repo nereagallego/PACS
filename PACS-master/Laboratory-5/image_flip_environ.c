@@ -242,6 +242,8 @@ int main(int argc, char** argv)
   printf("Kernel launched\n");
 
   CImg<unsigned char> image_out(image.width(), image.height(), 1, 4, 0);
+    // imaage size
+  printf("Image size: %d\n", image_out.size());
 
   // Read data from device memory to host memory
   err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
