@@ -5,7 +5,8 @@
 //
 // 
 ////////////////////////////////////////////////////////////////////
-
+#define cimg_use_jpeg
+#include "CImg.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,11 +15,14 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <vector>
 #ifdef __APPLE__
   #include <OpenCL/opencl.h>
 #else
   #include <CL/cl.h>
 #endif
+
+using namespace cimg_library;
   
 // check error, in such a case, it exits
 
@@ -37,7 +41,6 @@ int main(int argc, char** argv)
   char str_buffer[t_buf];		// auxiliary buffer	
   size_t e_buf;				// effective size of str_buffer in use
 	    
-  size_t global_size;                      	// global domain size for our calculation
   size_t local_size;                       	// local domain size for our calculation
 
   const cl_uint num_platforms_ids = 10;				// max of allocatable platforms
@@ -176,12 +179,102 @@ int main(int argc, char** argv)
   }
 
   // Create a compute kernel with the program we want to run
-  cl_kernel kernel = clCreateKernel(program, "histogram,", &err);
+  cl_kernel kernel = clCreateKernel(program, "histogram", &err);
   cl_error(err, "Failed to create kernel from the program\n");
   printf("Kernel created\n");
 
   // Create and initialize the input and output arrays at the host memory
+  CImg<unsigned char> image("lenna.jpg");
+  
+  // Create OpenCl image memory objects
+  cl_image_format format;
+  format.image_channel_order = CL_RGBA;
+  format.image_channel_data_type = CL_UNSIGNED_INT8;
 
+  cl_image_desc desc;
+  desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+  desc.image_width = image.width();
+  desc.image_height = image.height();
+  desc.image_depth = 0;
+  desc.image_array_size = 0;
+  desc.image_row_pitch = 0;
+  desc.image_slice_pitch = 0;
+  desc.num_mip_levels = 0;
+  desc.num_samples = 0;
+  desc.buffer = NULL;
+
+  cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
+  cl_error(err, "Failed to create input image memory object\n");
+  // Create OpenCL buffers for histograms
+  const int histogramSize = 256;
+  std::vector<uint32_t> redHistogram(histogramSize, 0);
+  std::vector<uint32_t> greenHistogram(histogramSize, 0);
+  std::vector<uint32_t> blueHistogram(histogramSize, 0);
+
+  cl_mem redBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint32_t) * histogramSize, redHistogram.data(), &err);
+  cl_error(err, "Failed to create red histogram buffer\n");
+  cl_mem greenBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint32_t) * histogramSize, greenHistogram.data(), &err);
+  cl_error(err, "Failed to create green histogram buffer\n");
+  cl_mem blueBuffer=clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(uint32_t) * histogramSize, blueHistogram.data(), &err);
+  cl_error(err, "Failed to create blue histogram buffer\n");
+
+  const size_t origin[3] = {0, 0, 0};
+  const size_t region[3] = {image.width(), image.height(), 1};
+  // Write data into the memory object
+  err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, origin,
+                            region, 0, 0, sizeof(unsigned char) * image.width()*4, 0, image.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to enqueue a write command\n");
+
+  // Set the arguments to our compute kernel
+  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &redBuffer);
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 2, sizeof(cl_mem), &greenBuffer);
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 3, sizeof(cl_mem), &blueBuffer);
+  cl_error(err, "Failed to set kernel arguments\n");
+
+  // Laucnh kernel
+  const size_t global_size[2] = {image.width(), image.height()};
+  printf("Local size: %d\n", local_size);
+  printf("Global size: %d\n", global_size[0] * global_size[1]);
+  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
+  cl_error(err, "Failed to launch kernel to the device\n");
+  printf("Kernel launched\n");
+
+  err = clEnqueueReadBuffer(command_queue, redBuffer, CL_TRUE, 0, sizeof(uint32_t) *
+                            histogramSize, redHistogram.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to read red histogram from the device\n");
+  err = clEnqueueReadBuffer(command_queue, greenBuffer, CL_TRUE, 0, sizeof(uint32_t) 
+                            * histogramSize, greenHistogram.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to read green histogram from the device\n");
+  err = clEnqueueReadBuffer(command_queue, blueBuffer, CL_TRUE, 0, sizeof(uint32_t) *
+                            histogramSize, blueHistogram.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to read blue histogram from the device\n");
+  printf("Data read from device\n");
+
+  CImg<unsigned char> histImage(800, 600, 1, 3, 0);
+  histImage.fill(255);
+
+  std::vector<float> redHistogramChar(redHistogram.begin(), redHistogram.end());
+  std::vector<float> greenHistogramChar(greenHistogram.begin(), greenHistogram.end());
+  std::vector<float> blueHistogramChar(blueHistogram.begin(), blueHistogram.end());
+
+  // Plot the red histogram
+  histImage.draw_graph(redHistogramChar.data(), histogramSize, 1, 0, 0, 255, 0, 1, 1);
+
+  // Plot the green histogram
+  histImage.draw_graph(greenHistogramChar.data(), histogramSize, 1, 0, 0, 0, 255, 1, 1);
+
+  // Plot the blue histogram
+  histImage.draw_graph(blueHistogramChar.data(), histogramSize, 1, 0, 0, 0, 0, 255, 1);
+  
+  // Display the histogram image
+  CImgDisplay disp(histImage, "Histograms");
+  while (!disp.is_closed()) {
+      disp.wait();
+  }
 
   // Release OpenCL resources
 
