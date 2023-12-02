@@ -229,24 +229,28 @@ int main(int argc, char** argv)
   const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
   err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
-                            origin, region, sizeof(unsigned char) * image.width()*4, 
+                            origin, region, image.width()*4, 
                             0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
  // Create and initialize the input and output arrays at the host memory
+
+  /
 
   // Set the arguments to the kernel
   err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
   cl_error(err, "Failed to set argument 0\n");
   err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
   cl_error(err, "Failed to set argument 1\n");
+
   err = clSetKernelArg(kernel, 2, sizeof(float), &angle_radians);
+  cl_error(err, "Failed to set argument 2\n");
 
   // Launch kernel
   // local_size = 64;
   const size_t global_size[2] = {image.width() , image.height()};
   // NDRange kernel launch = 2D grid of work items
   printf("Local size: %d\n", local_size);
-  printf("Global size: %d\n", global_size);
+  printf("Global size: %d\n", global_size[0] * global_size[1]);
   err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
@@ -255,10 +259,11 @@ int main(int argc, char** argv)
 
   // Read data from device memory to host memory
   err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
-                            origin, region, sizeof(unsigned char) * image.width()*4, 
+                            origin, region,  image.width()*4, 
                             0, image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
+
 
   // Display the image
   image_out.display("Image rotation");
@@ -266,11 +271,12 @@ int main(int argc, char** argv)
 
 
   // Release OpenCL resources
-
+  clReleaseSampler(sampler);
   clReleaseProgram(program);
   clReleaseKernel(kernel);
   clReleaseCommandQueue(command_queue);
   clReleaseContext(context);
+
 
   return 0;
 }
