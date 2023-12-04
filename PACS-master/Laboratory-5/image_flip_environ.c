@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 #ifdef __APPLE__
   #include <OpenCL/opencl.h>
 #else
@@ -35,6 +36,12 @@ void cl_error(cl_int code, const char *string){
 
 int main(int argc, char** argv)
 {
+  
+  clock_t start, end;
+  clock_t start_k, end_k;
+  double cpu_time_used, cpu_time_used_k;
+  start = clock();
+
   int err;                            	// error code returned from api calls
   size_t t_buf = 50;			// size of str_buffer
   char str_buffer[t_buf];		// auxiliary buffer	
@@ -152,7 +159,7 @@ int main(int argc, char** argv)
 
   // Calculate size of the file
   FILE *fileHandler = fopen("image_flip.cl", "r");
-  if (fileHandler == NULL){
+  if (fileHandler ==   NULL){
     printf("Failed to open kernel file\n");
     exit(-1);
   }
@@ -237,6 +244,9 @@ int main(int argc, char** argv)
   // NDRange kernel launch = 2D grid of work items
   printf("Local size: %d\n", local_size);
   printf("Global size: %d\n", global_size);
+
+  start_k = clock();
+  
   err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
@@ -252,6 +262,15 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
 
+  end_k = clock();
+  double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
+
+  // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
+  double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) / time_kernel;
+
+  // Trhoughput of the kernel.
+  double throughput = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)) / time_kernel;
+
   // Display the image
   image_out.display("Image flip");
 
@@ -263,6 +282,15 @@ int main(int argc, char** argv)
   clReleaseKernel(kernel);
   clReleaseCommandQueue(command_queue);
   clReleaseContext(context);
+
+  end = clock();
+  cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+  cpu_time_used_k = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
+
+  printf("Kernel time: %f\n", cpu_time_used_k);
+  printf("Overall time: %f\n", cpu_time_used);
+  printf("Bandwidth: %f\n", bandwidth);
+  printf("Throughput: %f\n", throughput);
 
   return 0;
 }
