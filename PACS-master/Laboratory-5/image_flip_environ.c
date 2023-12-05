@@ -268,8 +268,8 @@ int main(int argc, char** argv)
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
   double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) / time_kernel;
 
-  // Trhoughput of the kernel.
-  double throughput = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)) / time_kernel;
+  // Trhoughput of the kernel in terms of pixels flipped per second
+  double throughput = (double) (image.width() * image.height()) / time_kernel;
 
   // Display the image
   image_out.display("Image flip");

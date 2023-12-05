@@ -312,8 +312,8 @@ int main(int argc, char** argv)
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
   double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) / time_kernel;
 
-  // Trhoughput of the kernel.
-  double throughput = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)) / time_kernel;
+  // Trhoughput of the kernel in terms of number of pixels processed per second
+  double throughput = (double) (image.width() * image.height()) / time_kernel;
 
   // Print histograms
   // for (int i = 0; i < histogramSize; i++){
