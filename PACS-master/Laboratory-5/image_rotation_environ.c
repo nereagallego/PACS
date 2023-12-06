@@ -234,7 +234,7 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to enqueue a write command\n");
  // Create and initialize the input and output arrays at the host memory
 
-  /
+  
 
   // Set the arguments to the kernel
   err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
