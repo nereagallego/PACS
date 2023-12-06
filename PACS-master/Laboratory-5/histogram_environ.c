@@ -57,23 +57,27 @@ const int histogramSize = redHistogram.size();
         histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - redHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, red);
     }
 
-    // Plot green histogram
-    for (int i = 0; i < histogramSize; ++i) {
-        const int greenHeight = histHeight * greenHistogram[i] / (*std::max_element(greenHistogram.begin(), greenHistogram.end()));
-        histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - greenHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, green);
-    }
-
     // Plot blue histogram
     for (int i = 0; i < histogramSize; ++i) {
         const int blueHeight = histHeight * blueHistogram[i] / (*std::max_element(blueHistogram.begin(), blueHistogram.end()));
         histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - blueHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, blue);
     }
 
+    // Plot green histogram
+    for (int i = 0; i < histogramSize; ++i) {
+        const int greenHeight = histHeight * greenHistogram[i] / (*std::max_element(greenHistogram.begin(), greenHistogram.end()));
+        histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - greenHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, green);
+    }
+
+
     // Display histogram image
     CImgDisplay disp(histImage, "RGB Histograms");
     while (!disp.is_closed()) {
         disp.wait();
     }
+
+    // Save histogram image
+    histImage.save("histogram.png");
 }
 ////////////////////////////////////////////////////////////////////////////////
 

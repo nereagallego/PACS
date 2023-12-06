@@ -274,6 +274,9 @@ int main(int argc, char** argv)
   // Display the image
   image_out.display("Image flip");
 
+  // Save the image
+  image_out.save("lenna_flip.png");
+
 
 
   // Release OpenCL resources
