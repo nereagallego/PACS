@@ -320,7 +320,8 @@ int main(int argc, char** argv)
   double throughput = (double) (image.width() * image.height()) / time_kernel;
 
   // Memory footprint
-  double local_memory_footprint = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2); // image + image_out
+  // Local memory footprint
+  double local_memory_footprint = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + histogramSize*3*sizeof(unsigned int); // image + histogram buffers
   double kernel_memory_footprint_in;
   double kernel_memory_footprint_hist;
   clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
