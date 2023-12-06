@@ -37,7 +37,7 @@ void plotHistogram(const std::vector<unsigned int>& redHistogram,
                    const std::vector<unsigned int>& greenHistogram,
                    const std::vector<unsigned int>& blueHistogram) {
 
-const int histogramSize = redHistogram.size();
+    const int histogramSize = redHistogram.size();
     const int histWidth = 2; // Width of each histogram bar
     const int histHeight = 400; // Height of histogram image
     const int margin = 40; // Margin between histograms and window edge
@@ -68,8 +68,6 @@ const int histogramSize = redHistogram.size();
         const int blueHeight = histHeight * blueHistogram[i] / (*std::max_element(blueHistogram.begin(), blueHistogram.end()));
         histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - blueHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, blue);
     }
-
-
 
     // Display histogram image
     CImgDisplay disp(histImage, "RGB Histograms");
@@ -338,14 +336,16 @@ int main(int argc, char** argv)
 
   // Memory footprint
   // Local memory footprint
-  double local_memory_footprint = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + histogramSize*3*sizeof(unsigned int); // image + histogram buffers
-  double kernel_memory_footprint_in;
-  double kernel_memory_footprint_hist;
-  clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
-  clGetMemObjectInfo(redBuffer, CL_MEM_SIZE, sizeof(kernel_memory_footprint_hist), &kernel_memory_footprint_hist, NULL);
-  double kernel_memory_footprint_out = kernel_memory_footprint_hist * 3;
+  size_t local_memory_footprint = (size_t) image.width() * image.height() * 4 * sizeof(unsigned char) + histogramSize*3*sizeof(unsigned int); // image + histogram buffers
+  size_t kernel_memory_footprint_in = 0.0;
+  size_t kernel_memory_footprint_hist = 0.0;
+  err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
+  cl_error(err, "Failed to get memory object info\n");
+  err = clGetMemObjectInfo(redBuffer, CL_MEM_SIZE, sizeof(kernel_memory_footprint_hist), &kernel_memory_footprint_hist, NULL);
+  cl_error(err, "Failed to get memory object info\n");
+  size_t kernel_memory_footprint_out = kernel_memory_footprint_hist * 3;
 
-  double memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
 
   // Print histograms
   // for (int i = 0; i < histogramSize; i++){
@@ -372,7 +372,7 @@ int main(int argc, char** argv)
   printf("Overall time: %f\n", cpu_time_used);
   printf("Bandwidth: %f\n", bandwidth);
   printf("Throughput: %f\n", throughput);
-  printf("Memory footprint: %f\n", memory_footprint);
+  printf("Memory footprint: %zu\n", memory_footprint);
 
   return 0;
 }
