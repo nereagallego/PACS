@@ -271,6 +271,15 @@ int main(int argc, char** argv)
   // Trhoughput of the kernel in terms of pixels flipped per second
   double throughput = (double) (image.width() * image.height()) / time_kernel;
 
+  // Memory footprint
+  double local_memory_footprint = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2); // image + image_out
+  double kernel_memory_footprint_in;
+  double kernel_memory_footprint_out;
+  clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
+  clGetMemObjectInfo(out_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_out), &kernel_memory_footprint_out, NULL);
+
+  double memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
+
   // Display the image
   image_out.display("Image flip");
 
@@ -294,6 +303,7 @@ int main(int argc, char** argv)
   printf("Overall time: %f\n", cpu_time_used);
   printf("Bandwidth: %f\n", bandwidth);
   printf("Throughput: %f\n", throughput);
+  printf("Memory footprint: %f\n", memory_footprint);
 
   return 0;
 }

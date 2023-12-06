@@ -319,6 +319,16 @@ int main(int argc, char** argv)
   // Trhoughput of the kernel in terms of number of pixels processed per second
   double throughput = (double) (image.width() * image.height()) / time_kernel;
 
+  // Memory footprint
+  double local_memory_footprint = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2); // image + image_out
+  double kernel_memory_footprint_in;
+  double kernel_memory_footprint_hist;
+  clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
+  clGetMemObjectInfo(redBuffer, CL_MEM_SIZE, sizeof(kernel_memory_footprint_hist), &kernel_memory_footprint_hist, NULL);
+  double kernel_memory_footprint_out = kernel_memory_footprint_hist * 3;
+
+  double memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
+
   // Print histograms
   // for (int i = 0; i < histogramSize; i++){
   //   printf("Red[%d]: %d\n", i, redHistogram[i]);
@@ -344,6 +354,7 @@ int main(int argc, char** argv)
   printf("Overall time: %f\n", cpu_time_used);
   printf("Bandwidth: %f\n", bandwidth);
   printf("Throughput: %f\n", throughput);
+  printf("Memory footprint: %f\n", memory_footprint);
 
   return 0;
 }
