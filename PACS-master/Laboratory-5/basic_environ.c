@@ -68,13 +68,13 @@ int main(int argc, char** argv)
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Vendor: %s\n", i, str_buffer);
     // print vendor
-    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
-    cl_error (err, "Error: Failed to get info of the platform\n");
-    printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
+    // err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
+    // cl_error (err, "Error: Failed to get info of the platform\n");
+    // printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
     // print version
-    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
-    cl_error (err, "Error: Failed to get info of the platform\n");
-    printf("\t[%d]-Platform Version: %s\n", i, str_buffer);
+    // err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
+    // cl_error (err, "Error: Failed to get info of the platform\n");
+    // printf("\t[%d]-Platform Version: %s\n", i, str_buffer);
   }
   printf("\n");
   // ***Task***: print on the screen the name, host_timer_resolution, vendor, versionm, ...
