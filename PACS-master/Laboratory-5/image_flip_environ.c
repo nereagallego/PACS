@@ -43,7 +43,7 @@ int main(int argc, char** argv)
   start = clock();
 
   int err;                            	// error code returned from api calls
-  size_t t_buf = 50;			// size of str_buffer
+  size_t t_buf = 1000;			// size of str_buffer
   char str_buffer[t_buf];		// auxiliary buffer	
   size_t e_buf;				// effective size of str_buffer in use
 	    
@@ -78,15 +78,16 @@ int main(int argc, char** argv)
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Vendor: %s\n", i, str_buffer);
     // print vendor
-    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
-    cl_error (err, "Error: Failed to get info of the platform\n");
-    printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
+    // err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
+    // cl_error (err, "Error: Failed to get info of the platform\n");
+    // printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
     // print version
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Version: %s\n", i, str_buffer);
   }
   printf("\n");
+
   // ***Task***: print on the screen the name, host_timer_resolution, vendor, versionm, ...
 
   // 2. Scan for devices in each platform
@@ -143,17 +144,39 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
+  // Select a platform with version at least 2.0
+  int platform_selected = -1;
+  int platform_12 = -1;
+  bool found = false;
+  for (int i = 0; i < n_platforms; i++){
+    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
+    cl_error (err, "Error: Failed to get info of the platform\n");
+    if (str_buffer[7] == '1'){
+      platform_12= i;
+    }
+    else if (str_buffer[7] >= '2'){
+      platform_selected = i;
+      found = true;
+      printf("Platform with OpenCL >= 2.0 selected!\n");
+      break;
+    }
+  }
 
+  if (!found){
+    printf("Platform with OpenCL >= 2.0 not found.\n");
+    exit(-1);
+    // platform_selected = platform_12;
+  }
 
   // 3. Create a context, with a device
-  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[0], 0 };
-  context = clCreateContext(properties, 1, devices_ids[0], NULL, NULL, &err);
+  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
+  context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
   cl_error(err, "Failed to create a compute context\n");
   printf("Context created\n");
 
   // 4. Create a command queue
   cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
-  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[0][0], proprt, &err);
+  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[platform_selected][0], proprt, &err);
   cl_error(err, "Failed to create a command queue\n");
   printf("Command queue created\n");
 
@@ -196,7 +219,7 @@ int main(int argc, char** argv)
   printf("Kernel created\n");
 
   // Create and initialize the input and output arrays at the host memory
-  CImg<unsigned char> image("lenna.png");
+  CImg<unsigned char> image("lenna.jpg");
 
   // Create OpenCL image memory objects
   cl_image_format format;
@@ -215,10 +238,22 @@ int main(int argc, char** argv)
   desc.num_samples = 0;
   desc.buffer = NULL;
 
-  cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
-  cl_error(err, "Failed to create memory image at device\n");
-  cl_mem out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
-  cl_error(err, "Failed to create memory image at device\n");
+  cl_mem in_device_object;
+  cl_mem out_device_object;
+
+  
+  in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
+  cl_error(err, "Failed to create memory image at device 3.0\n");
+  out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
+  cl_error(err, "Failed to create memory image at device 3.0 \n");
+  
+  // else {
+
+  //   in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc_2, NULL, &err);
+  //   cl_error(err, "Failed to create memory image at device, low version\n");
+  //   out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc_2, NULL, &err);
+  //   cl_error(err, "Failed to create memory image at device, low version\n");
+  // }
 
   // imaage size
   printf("Image size: %d\n", image.size());
@@ -284,7 +319,7 @@ int main(int argc, char** argv)
   image_out.display("Image flip");
 
   // Save the image
-  image_out.save("lenna_flip.png");
+  image_out.save("lenna_flip.jpg");
 
 
 

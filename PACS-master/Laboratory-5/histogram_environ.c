@@ -57,17 +57,18 @@ const int histogramSize = redHistogram.size();
         histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - redHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, red);
     }
 
+    // Plot green histogram
+    for (int i = 0; i < histogramSize; ++i) {
+        const int greenHeight = histHeight * greenHistogram[i] / (*std::max_element(greenHistogram.begin(), greenHistogram.end()));
+        histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - greenHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, green);
+    }
+    
     // Plot blue histogram
     for (int i = 0; i < histogramSize; ++i) {
         const int blueHeight = histHeight * blueHistogram[i] / (*std::max_element(blueHistogram.begin(), blueHistogram.end()));
         histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - blueHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, blue);
     }
 
-    // Plot green histogram
-    for (int i = 0; i < histogramSize; ++i) {
-        const int greenHeight = histHeight * greenHistogram[i] / (*std::max_element(greenHistogram.begin(), greenHistogram.end()));
-        histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - greenHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, green);
-    }
 
 
     // Display histogram image
@@ -77,7 +78,7 @@ const int histogramSize = redHistogram.size();
     }
 
     // Save histogram image
-    histImage.save("histogram.png");
+    histImage.save("histogram.jpg");
 }
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -90,7 +91,7 @@ int main(int argc, char** argv)
   start = clock();
 
   int err;                            	// error code returned from api calls
-  size_t t_buf = 50;			// size of str_buffer
+  size_t t_buf = 1000;			// size of str_buffer
   char str_buffer[t_buf];		// auxiliary buffer	
   size_t e_buf;				// effective size of str_buffer in use
 	    
@@ -124,10 +125,10 @@ int main(int argc, char** argv)
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Vendor: %s\n", i, str_buffer);
     // print vendor
-    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
-    cl_error (err, "Error: Failed to get info of the platform\n");
-    printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
-    // print version
+    // err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
+    // cl_error (err, "Error: Failed to get info of the platform\n");
+    // printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
+    // // print version
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Version: %s\n", i, str_buffer);
@@ -184,17 +185,33 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
-
+  // Select a platform with version at least 2.0
+  int platform_selected = -1;
+  int platform_12 = -1;
+  bool found = false;
+  for (int i = 0; i < n_platforms; i++){
+    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
+    cl_error (err, "Error: Failed to get info of the platform\n");
+    if (str_buffer[7] == '1'){
+      platform_12= i;
+    }
+    else if (str_buffer[7] >= '2'){
+      platform_selected = i;
+      found = true;
+      printf("Platform with OpenCL >= 2.0 selected!\n");
+      break;
+    }
+  }
 
   // 3. Create a context, with a device
-  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[0], 0 };
-  context = clCreateContext(properties, 1, devices_ids[0], NULL, NULL, &err);
+  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
+  context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
   cl_error(err, "Failed to create a compute context\n");
   printf("Context created\n");
 
   // 4. Create a command queue
   cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
-  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[0][0], proprt, &err);
+  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[platform_selected][0], proprt, &err);
   cl_error(err, "Failed to create a command queue\n");
   printf("Command queue created\n");
 
@@ -237,7 +254,7 @@ int main(int argc, char** argv)
   printf("Kernel created\n");
 
   // Create and initialize the input and output arrays at the host memory
-  CImg<unsigned char> image("lenna.png");
+  CImg<unsigned char> image("lenna.jpg");
   
   // Create OpenCl image memory objects
   cl_image_format format;
