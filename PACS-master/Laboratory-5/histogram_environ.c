@@ -271,6 +271,8 @@ int main(int argc, char** argv)
   desc.num_samples = 0;
   desc.buffer = NULL;
 
+  image.save("lenna2.jpg");
+
   cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
   cl_error(err, "Failed to create input image memory object\n");
   // Create OpenCL buffers for histograms
@@ -290,7 +292,7 @@ int main(int argc, char** argv)
   const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
   err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, origin,
-                            region, sizeof(unsigned char) * image.width()*4, 0, image.data(), 0, NULL, NULL);
+                            region, 0, 0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
 
   // Set the arguments to our compute kernel

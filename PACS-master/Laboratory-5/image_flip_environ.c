@@ -225,9 +225,7 @@ int main(int argc, char** argv)
   cl_image_format format;
   format.image_channel_order = CL_RGBA;
   format.image_channel_data_type = CL_UNSIGNED_INT8;
-  size_t row_pitch = image.width() * image.spectrum() * sizeof(unsigned char);
-
-
+ 
   cl_image_desc desc;
   desc.image_type = CL_MEM_OBJECT_IMAGE2D;
   desc.image_width = image.width();
