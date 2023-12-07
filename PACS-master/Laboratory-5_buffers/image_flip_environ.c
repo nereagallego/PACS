@@ -225,21 +225,21 @@ int main(int argc, char** argv)
   int height = image.height();
 
   // Create OpenCL buffer memory objects
-  size_t img_size = image.width() * image.height() * 4; // 4 for RGBA channels
+  size_t img_size = image.size();
 
   cl_mem in_device_object;
   cl_mem out_device_object;
 
-  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, img_size, NULL, &err);
+  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
   cl_error(err, "Failed to create memory buffer at device 3.0\n");
-  out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, img_size, NULL, &err);
+  out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
   cl_error(err, "Failed to create memory buffer at device 3.0 \n");
 
   // Image size
   printf("Image size: %d\n", image.size());
 
   // Write data into the memory object
-  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, img_size, image.data(), 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
 
   // Set the arguments to the kernel
@@ -268,7 +268,7 @@ int main(int argc, char** argv)
   printf("Image size: %d\n", image_out.size());
 
   // Read data from device memory to host memory
-  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0,sizeof(unsigned char)*size, 
+  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0,sizeof(unsigned char)*img_size, 
                             image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");

@@ -160,6 +160,8 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
+  platform_selected = 0;
+
   // 3. Create a context, with a device
   cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
   context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
@@ -194,7 +196,7 @@ int main(int argc, char** argv)
   free(sourceCode);
 
   // Build the executable and check errors
-  err = clBuildProgram(program, 1, &devices_ids[platform_selected][0], NULL, NULL, NULL);
+  err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
   if (err != CL_SUCCESS){
     size_t len;
     char buffer[2048];
@@ -218,69 +220,56 @@ int main(int argc, char** argv)
   float angle_radians = angle * M_PI / 180.0;
   printf("Angle: %f\n", angle_radians);
 
-  // Create OpenCL image memory objects
-  cl_image_format format;
-  format.image_channel_order = CL_RGBA;
-  format.image_channel_data_type = CL_UNSIGNED_INT8;
+  int width = image.width();
+  int height = image.height();
 
-  cl_image_desc desc;
-  desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-  desc.image_width = image.width();
-  desc.image_height = image.height();
-  desc.image_depth = 0;
-  desc.image_array_size = 0;
-  desc.image_row_pitch = 0;
-  desc.image_slice_pitch = 0;
-  desc.num_mip_levels = 0;
-  desc.num_samples = 0;
-  desc.buffer = NULL;
+  // Create OpenCL buffer memory objects
+  size_t img_size = image.size();
 
-  cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
-  cl_error(err, "Failed to create memory image at device\n");
-  cl_mem out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
-  cl_error(err, "Failed to create memory image at device\n");
+  cl_mem in_device_object;
+  cl_mem out_device_object;
 
-  // imaage size
+  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+  cl_error(err, "Failed to create memory buffer at device 3.0\n");
+  out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+  cl_error(err, "Failed to create memory buffer at device 3.0 \n");
+
+  // Image size
   printf("Image size: %d\n", image.size());
 
-  const size_t origin[3] = {0, 0, 0};
-  const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
-  err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
-                            origin, region, 0, 
-                            0, image.data(), 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
- // Create and initialize the input and output arrays at the host memory
-
-  
 
   // Set the arguments to the kernel
   err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
-  cl_error(err, "Failed to set argument 0\n");
+  cl_error(err, "Failed to set kernel arguments\n");
   err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
-  cl_error(err, "Failed to set argument 1\n");
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 2, sizeof(int), &width);
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 3, sizeof(int), &height);
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 4, sizeof(float), &angle_radians);
 
-  err = clSetKernelArg(kernel, 2, sizeof(float), &angle_radians);
-  cl_error(err, "Failed to set argument 2\n");
 
   // Launch kernel
-  // local_size = 64;
-  const size_t global_size[2] = {image.width() , image.height()};
-  // NDRange kernel launch = 2D grid of work items
-  printf("Local size: %d\n", local_size);
-  printf("Global size: %d\n", global_size[0] * global_size[1]);
+  const size_t global_size[3] = {image.width() , image.height(), image.spectrum()};
 
   start_k = clock();
-  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
+
+  err = clEnqueueNDRangeKernel(command_queue, kernel, 3, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  CImg<unsigned char> image_out(image.width(), image.height(), 1, 4,0);
+  clFinish(command_queue);
+
+  CImg<unsigned char> image_out(image.width(), image.height(), 1, 3);
+  printf("Image size: %d\n", image_out.size());
 
   // Read data from device memory to host memory
-  err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
-                            origin, region,  0, 
-                            0, image_out.data(), 0, NULL, NULL);
+  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0,sizeof(unsigned char)*img_size, 
+                            image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
 
