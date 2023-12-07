@@ -160,8 +160,6 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
-  platform_selected = 0;
-
   // 3. Create a context, with a device
   cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
   context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
@@ -196,7 +194,7 @@ int main(int argc, char** argv)
   free(sourceCode);
 
   // Build the executable and check errors
-  err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+  err = clBuildProgram(program, 1, &devices_ids[platform_selected][0], NULL, NULL, NULL);
   if (err != CL_SUCCESS){
     size_t len;
     char buffer[2048];
@@ -220,60 +218,64 @@ int main(int argc, char** argv)
   float angle_radians = angle * M_PI / 180.0;
   printf("Angle: %f\n", angle_radians);
 
-  int width = image.width();
-  int height = image.height();
 
-  // Create OpenCL buffer memory objects
-  size_t img_size = image.size();
+  
+  cl_mem inputBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, image.size() * sizeof(unsigned char), NULL, &err);
+  cl_error(err, "Failed to create input buffer\n");
+  cl_mem outputBuffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, image.size() * sizeof(unsigned char), NULL, &err);
+  cl_error(err, "Failed to create output buffer\n");
 
-  cl_mem in_device_object;
-  cl_mem out_device_object;
 
-  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
-  cl_error(err, "Failed to create memory buffer at device 3.0\n");
-  out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
-  cl_error(err, "Failed to create memory buffer at device 3.0 \n");
-
-  // Image size
+  // imaage size
   printf("Image size: %d\n", image.size());
 
-  // Write data into the memory object
-  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(command_queue, inputBuffer, CL_TRUE, 0, image.size() * sizeof(unsigned char), image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
+  printf("Data written to device\n");
+ // Create and initialize the input and output arrays at the host memory
+
+  int width = image.width();
+  int height = image.height();
+  int spectrum = image.spectrum();
 
   // Set the arguments to the kernel
-  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
-  cl_error(err, "Failed to set kernel arguments\n");
-  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
-  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputBuffer);
+  cl_error(err, "Failed to set argument 0\n");
+  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &outputBuffer);
+  cl_error(err, "Failed to set argument 1\n");
   err = clSetKernelArg(kernel, 2, sizeof(int), &width);
-  cl_error(err, "Failed to set kernel arguments\n");
+  cl_error(err, "Failed to set argument 2\n");
   err = clSetKernelArg(kernel, 3, sizeof(int), &height);
-  cl_error(err, "Failed to set kernel arguments\n");
+  cl_error(err, "Failed to set argument 3\n");
   err = clSetKernelArg(kernel, 4, sizeof(float), &angle_radians);
-
+  cl_error(err, "Failed to set argument 2\n");
 
   // Launch kernel
-  const size_t global_size[3] = {image.width() , image.height(), image.spectrum()};
+  // local_size = 64;
+  const size_t global_size[2] = {static_cast<size_t>(image.width()) , static_cast<size_t>(image.height())};
+  // NDRange kernel launch = 2D grid of work items
+  printf("Local size: %d\n", local_size);
+  printf("Global size: %d\n", global_size[0] * global_size[1]);
 
   start_k = clock();
-
-  err = clEnqueueNDRangeKernel(command_queue, kernel, 3, NULL, global_size, NULL, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  clFinish(command_queue);
-
-  CImg<unsigned char> image_out(image.width(), image.height(), 1, 3);
-  printf("Image size: %d\n", image_out.size());
+  CImg<unsigned char> image_out(width, height, 1, spectrum);
 
   // Read data from device memory to host memory
-  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0,sizeof(unsigned char)*img_size, 
-                            image_out.data(), 0, NULL, NULL);
-  cl_error(err, "Failed to enqueue a read command\n\n");
+  err = clEnqueueReadBuffer(command_queue, outputBuffer, CL_TRUE, 0, image_out.size() * sizeof(unsigned char), image_out.data(), 0, NULL, NULL);
+  cl_error(err, "Failed to enqueue a read command\n");
   printf("Data read from device\n");
 
   end_k = clock();
+
+  // Display the image
+  image_out.display("Image rotation");
+
+  // Save the image
+  image_out.save("lenna_rotated.jpeg");
 
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
@@ -287,19 +289,13 @@ int main(int argc, char** argv)
   size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + sizeof(float); // image + image_out + angle
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
-  err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
+  err = clGetMemObjectInfo(inputBuffer , CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
   cl_error(err, "Failed to get memory object info\n");
-  err = clGetMemObjectInfo(out_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
+  err = clGetMemObjectInfo(outputBuffer, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
 
   size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(float);
 
-
-  // Display the image
-  image_out.display("Image rotation");
-
-  // Save the image
-  image_out.save("lenna_rotated.jpeg");
 
   // Release OpenCL resources
   clReleaseProgram(program);
