@@ -76,7 +76,7 @@ void plotHistogram(const std::vector<unsigned int>& redHistogram,
     }
 
     // Save histogram image
-    histImage.save("histogram.jpg");
+    histImage.save("histogram.jpeg");
 }
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -252,7 +252,7 @@ int main(int argc, char** argv)
   printf("Kernel created\n");
 
   // Create and initialize the input and output arrays at the host memory
-  CImg<unsigned char> image("lenna.jpg");
+  CImg<unsigned char> image("lenna.jpeg");
   
   // Create OpenCl image memory objects
   cl_image_format format;
@@ -270,8 +270,6 @@ int main(int argc, char** argv)
   desc.num_mip_levels = 0;
   desc.num_samples = 0;
   desc.buffer = NULL;
-
-  image.save("lenna2.jpg");
 
   cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
   cl_error(err, "Failed to create input image memory object\n");
@@ -292,7 +290,7 @@ int main(int argc, char** argv)
   const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
   err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, origin,
-                            region, 0, 0, image.data(), 0, NULL, NULL);
+                            region, sizeof(unsigned char) * image.width()*4, 0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
 
   // Set the arguments to our compute kernel
