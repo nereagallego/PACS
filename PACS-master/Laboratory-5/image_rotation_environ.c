@@ -35,6 +35,11 @@ void cl_error(cl_int code, const char *string){
 
 int main(int argc, char** argv)
 {
+  clock_t start, end;
+  clock_t start_k, end_k;
+  double cpu_time_used, cpu_time_used_k;
+  start = clock();
+
   int err;                            	// error code returned from api calls
   size_t t_buf = 50;			// size of str_buffer
   char str_buffer[t_buf];		// auxiliary buffer	
@@ -71,10 +76,10 @@ int main(int argc, char** argv)
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Vendor: %s\n", i, str_buffer);
     // print vendor
-    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
-    cl_error (err, "Error: Failed to get info of the platform\n");
-    printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
-    // print version
+    // err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
+    // cl_error (err, "Error: Failed to get info of the platform\n");
+    // printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
+    // // print version
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Version: %s\n", i, str_buffer);
@@ -122,11 +127,6 @@ int main(int argc, char** argv)
       cl_error(err, "clGetDeviceInfo: Getting device max work group size");
       printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_GROUP_SIZE: %d\n", i, 0, max_work_group_size);
 
-      size_t max_work_item_dimensions;
-      err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(max_work_item_dimensions), &max_work_item_dimensions, NULL);
-      cl_error(err, "clGetDeviceInfo: Getting device max work item dimensions");
-      printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS: %d\n", i, 0, max_work_item_dimensions);
-
       // print the profiling timer resolution
       size_t profiling_timer_resolution;
       err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(profiling_timer_resolution), &profiling_timer_resolution, NULL);
@@ -136,6 +136,24 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
+  // Select a platform with version at least 2.0
+  int platform_selected = -1;
+  int platform_12 = -1;
+  bool found = false;
+  for (int i = 0; i < n_platforms; i++){
+    err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
+    cl_error (err, "Error: Failed to get info of the platform\n");
+    if (str_buffer[7] == '1'){
+      platform_12= i;
+    }
+    else if (str_buffer[7] >= '2'){
+      platform_selected = i;
+      found = true;
+      printf("Platform with OpenCL >= 2.0 selected!\n");
+      break;
+    }
+  }
+
   // Check if rotation angle is given
   if (argc < 2){
     printf("Usage: %s <angle>\n", argv[0]);
@@ -143,14 +161,14 @@ int main(int argc, char** argv)
   }
 
   // 3. Create a context, with a device
-  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[0], 0 };
-  context = clCreateContext(properties, 1, devices_ids[0], NULL, NULL, &err);
+  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
+  context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
   cl_error(err, "Failed to create a compute context\n");
   printf("Context created\n");
 
   // 4. Create a command queue
   cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
-  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[0][0], proprt, &err);
+  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[platform_selected][0], proprt, &err);
   cl_error(err, "Failed to create a command queue\n");
   printf("Command queue created\n");
 
@@ -176,13 +194,13 @@ int main(int argc, char** argv)
   free(sourceCode);
 
   // Build the executable and check errors
-  err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+  err = clBuildProgram(program, 1, &devices_ids[platform_selected][0], NULL, NULL, NULL);
   if (err != CL_SUCCESS){
     size_t len;
     char buffer[2048];
 
     printf("Error: Some error at building process.\n");
-    clGetProgramBuildInfo(program, devices_ids[0][0], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+    clGetProgramBuildInfo(program, devices_ids[platform_selected][0], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
     printf("%s\n", buffer);
     exit(-1);
   }
@@ -193,7 +211,7 @@ int main(int argc, char** argv)
   printf("Kernel created\n");
 
   // Create and initialize the input image
-  CImg<unsigned char> image("lenna.png");
+  CImg<unsigned char> image("lenna.jpeg");
 
   // Get angle from user and convert to radians
   float angle = atof(argv[1]);
@@ -229,7 +247,7 @@ int main(int argc, char** argv)
   const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
   err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
-                            origin, region, image.width()*4, 
+                            origin, region, 0, 
                             0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
  // Create and initialize the input and output arrays at the host memory
@@ -251,32 +269,64 @@ int main(int argc, char** argv)
   // NDRange kernel launch = 2D grid of work items
   printf("Local size: %d\n", local_size);
   printf("Global size: %d\n", global_size[0] * global_size[1]);
+
+  start_k = clock();
   err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  CImg<unsigned char> image_out(image.width(), image.height(), 1, 4, 0);
+  CImg<unsigned char> image_out(image.width(), image.height(), 1, 4,0);
 
   // Read data from device memory to host memory
   err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
-                            origin, region,  image.width()*4, 
+                            origin, region,  0, 
                             0, image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
+
+  end_k = clock();
+
+  double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
+
+  // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
+  double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + sizeof(float) / time_kernel;
+
+  // Trhoughput of the kernel in terms of pixels flipped per second
+  double throughput = (double) (image.width() * image.height()) / time_kernel;
+
+  // Memory footprint
+  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + sizeof(float); // image + image_out + angle
+  size_t kernel_memory_footprint_in = 0.0;
+  size_t kernel_memory_footprint_out = 0.0;
+  err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
+  cl_error(err, "Failed to get memory object info\n");
+  err = clGetMemObjectInfo(out_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
+  cl_error(err, "Failed to get memory object info\n");
+
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(float);
 
 
   // Display the image
   image_out.display("Image rotation");
 
-
+  // Save the image
+  image_out.save("lenna_rotated.jpeg");
 
   // Release OpenCL resources
-  clReleaseSampler(sampler);
   clReleaseProgram(program);
   clReleaseKernel(kernel);
   clReleaseCommandQueue(command_queue);
   clReleaseContext(context);
 
+  end = clock();
+  cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+  cpu_time_used_k = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
+
+  printf("Kernel time: %f\n", cpu_time_used_k);
+  printf("Overall time: %f\n", cpu_time_used);
+  printf("Bandwidth: %f\n", bandwidth);
+  printf("Throughput: %f\n", throughput);
+  printf("Memory footprint: %zu\n", memory_footprint);
 
   return 0;
 }

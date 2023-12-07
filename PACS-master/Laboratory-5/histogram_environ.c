@@ -74,9 +74,6 @@ void plotHistogram(const std::vector<unsigned int>& redHistogram,
     while (!disp.is_closed()) {
         disp.wait();
     }
-
-    // Save histogram image
-    histImage.save("histogram.jpeg");
 }
 ////////////////////////////////////////////////////////////////////////////////
 

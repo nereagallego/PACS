@@ -246,14 +246,6 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to create memory image at device 3.0\n");
   out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
   cl_error(err, "Failed to create memory image at device 3.0 \n");
-  
-  // else {
-
-  //   in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc_2, NULL, &err);
-  //   cl_error(err, "Failed to create memory image at device, low version\n");
-  //   out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc_2, NULL, &err);
-  //   cl_error(err, "Failed to create memory image at device, low version\n");
-  // }
 
   // imaage size
   printf("Image size: %d\n", image.size());
@@ -262,7 +254,7 @@ int main(int argc, char** argv)
   const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
   err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
-                            origin, region, sizeof(unsigned char) * image.width()*4, 
+                            origin, region, 0, 
                             0, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
  // Create and initialize the input and output arrays at the host memory
@@ -286,16 +278,21 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
+  clFinish(command_queue);
+  
   CImg<unsigned char> image_out(image.width(), image.height(), 1, 4, 0);
     // imaage size
   printf("Image size: %d\n", image_out.size());
 
   // Read data from device memory to host memory
   err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
-                            origin, region, sizeof(unsigned char) * image.width()*4, 
+                            origin, region, 0, 
                             0, image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
+
+  // Display the image
+  image_out.display("Image flip");
 
   end_k = clock();
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
@@ -316,14 +313,6 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to get memory object info\n");
 
   size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
-
-  // Display the image
-  image_out.display("Image flip");
-
-  // Save the image
-  image_out.save("lenna_flip.jpeg");
-
-
 
   // Release OpenCL resources
 
