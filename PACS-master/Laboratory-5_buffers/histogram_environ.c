@@ -327,7 +327,7 @@ int main(int argc, char** argv)
 
   // Memory footprint
   // Local memory footprint
-  size_t local_memory_footprint = (size_t) image.width() * image.height() * 4 * sizeof(unsigned char) + histogramSize*3*sizeof(unsigned int); // image + histogram buffers
+  size_t local_memory_footprint = (size_t) image.width() * image.height() * 4 * sizeof(unsigned char) + histogramSize*3*sizeof(unsigned int) + 2 * sizeof(int) + sizeof(size_t); // image + histogram buffers
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_hist = 0.0;
   err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);

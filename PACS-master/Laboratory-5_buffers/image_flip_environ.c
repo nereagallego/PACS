@@ -223,6 +223,7 @@ int main(int argc, char** argv)
 
   int width = image.width();
   int height = image.height();
+  int spectrum = image.spectrum();
 
   // Create OpenCL buffer memory objects
   size_t img_size = image.size();
@@ -254,7 +255,7 @@ int main(int argc, char** argv)
 
 
   // Launch kernel
-  const size_t global_size[3] = {image.width() , image.height(), image.spectrum()};
+  const size_t global_size[3] = {static_cast<size_t>(width) , static_cast<size_t>(height), static_cast<size_t>(spectrum)};
 
   start_k = clock();
 
@@ -264,7 +265,7 @@ int main(int argc, char** argv)
 
   clFinish(command_queue);
 
-  CImg<unsigned char> image_out(image.width(), image.height(), 1, 3);
+  CImg<unsigned char> image_out(width, height, 1, spectrum);
   printf("Image size: %d\n", image_out.size());
 
   // Read data from device memory to host memory
@@ -289,7 +290,7 @@ int main(int argc, char** argv)
   double throughput = (double) (image.width() * image.height()) / time_kernel;
 
   // Memory footprint
-  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2); // image + image_out
+  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2 + 3 * sizeof(int) + sizeof(size_t) ); // image + image_out + vars_dim_image
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
   err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);

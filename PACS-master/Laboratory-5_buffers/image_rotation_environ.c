@@ -286,7 +286,7 @@ int main(int argc, char** argv)
   double throughput = (double) (image.width() * image.height()) / time_kernel;
 
   // Memory footprint
-  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + sizeof(float); // image + image_out + angle
+  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + sizeof(float) + 3 * sizeof(int) + sizeof(size_t); // image + image_out + angle
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
   err = clGetMemObjectInfo(inputBuffer , CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
