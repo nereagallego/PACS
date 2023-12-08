@@ -69,6 +69,8 @@ void plotHistogram(const std::vector<unsigned int>& redHistogram,
         histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - blueHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, blue);
     }
 
+    histImage.save("histogram.jpeg");
+
     // Display histogram image
     CImgDisplay disp(histImage, "RGB Histograms");
     while (!disp.is_closed()) {
@@ -293,15 +295,15 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to set kernel arguments\n");
 
   // Launch kernel
-  const size_t global_size[3] = {image.width(), image.height(), image.spectrum()};
+  const size_t global_size[2] = {static_cast<size_t>(image.width()), static_cast<size_t>(image.height())};
 
   start_k = clock();
 
-  err = clEnqueueNDRangeKernel(command_queue, kernel, 3, NULL, global_size, NULL, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  clFinish(command_queue);
+  // clFinish(command_queue);
 
   err = clEnqueueReadBuffer(command_queue, redBuffer, CL_TRUE, 0, sizeof(unsigned int) *
                             histogramSize, redHistogram.data(), 0, NULL, NULL);
