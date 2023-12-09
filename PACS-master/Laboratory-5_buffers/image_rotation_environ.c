@@ -41,7 +41,7 @@ int main(int argc, char** argv)
   start = clock();
 
   int err;                            	// error code returned from api calls
-  size_t t_buf = 50;			// size of str_buffer
+  size_t t_buf = 1000;			// size of str_buffer
   char str_buffer[t_buf];		// auxiliary buffer	
   size_t e_buf;				// effective size of str_buffer in use
 	    
@@ -213,30 +213,33 @@ int main(int argc, char** argv)
   // Create and initialize the input image
   CImg<unsigned char> image("lenna.jpeg");
 
+  int width = image.width();
+  int height = image.height();
+  int spectrum = image.spectrum();
+
+  // Create OpenCL buffer memory objects
+  size_t img_size = image.size();
+
   // Get angle from user and convert to radians
   float angle = atof(argv[1]);
   float angle_radians = angle * M_PI / 180.0;
-  printf("Angle: %f\n", angle_radians);
+  // printf("Angle: %f\n", angle_radians);
 
 
   
-  cl_mem inputBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, image.size() * sizeof(unsigned char), NULL, &err);
+  cl_mem inputBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, img_size * sizeof(unsigned char), NULL, &err);
   cl_error(err, "Failed to create input buffer\n");
-  cl_mem outputBuffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, image.size() * sizeof(unsigned char), NULL, &err);
+  cl_mem outputBuffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, img_size * sizeof(unsigned char), NULL, &err);
   cl_error(err, "Failed to create output buffer\n");
 
 
   // imaage size
-  printf("Image size: %d\n", image.size());
+  // printf("Image size: %d\n", image.size());
 
-  err = clEnqueueWriteBuffer(command_queue, inputBuffer, CL_TRUE, 0, image.size() * sizeof(unsigned char), image.data(), 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(command_queue, inputBuffer, CL_TRUE, 0, img_size * sizeof(unsigned char), image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
   printf("Data written to device\n");
  // Create and initialize the input and output arrays at the host memory
-
-  int width = image.width();
-  int height = image.height();
-  int spectrum = image.spectrum();
 
   // Set the arguments to the kernel
   err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputBuffer);
@@ -252,10 +255,10 @@ int main(int argc, char** argv)
 
   // Launch kernel
   // local_size = 64;
-  const size_t global_size[2] = {static_cast<size_t>(image.width()) , static_cast<size_t>(image.height())};
+  const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
   // NDRange kernel launch = 2D grid of work items
-  printf("Local size: %d\n", local_size);
-  printf("Global size: %d\n", global_size[0] * global_size[1]);
+  // printf("Local size: %d\n", local_size);
+  // printf("Global size: %d\n", global_size[0] * global_size[1]);
 
   start_k = clock();
   err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
@@ -280,13 +283,13 @@ int main(int argc, char** argv)
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
-  double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + sizeof(float) / time_kernel;
+  double bandwidth = (double) (img_size * sizeof(unsigned char) * 2) + sizeof(float) + 2 * sizeof(int) / time_kernel;
 
   // Trhoughput of the kernel in terms of pixels flipped per second
-  double throughput = (double) (image.width() * image.height()) / time_kernel;
+  double throughput = (double) (width*height) / time_kernel;
 
   // Memory footprint
-  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) + sizeof(float) + 3 * sizeof(int) + sizeof(size_t); // image + image_out + angle
+  size_t local_memory_footprint = (size_t) (img_size * sizeof(unsigned char) * 2) + sizeof(float) + 2 * sizeof(int);
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
   err = clGetMemObjectInfo(inputBuffer , CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
@@ -294,7 +297,7 @@ int main(int argc, char** argv)
   err = clGetMemObjectInfo(outputBuffer, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(float);
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + 2 * sizeof(int) + sizeof(float);
 
 
   // Release OpenCL resources

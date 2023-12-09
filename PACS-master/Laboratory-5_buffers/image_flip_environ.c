@@ -237,7 +237,7 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to create memory buffer at device 3.0 \n");
 
   // Image size
-  printf("Image size: %d\n", image.size());
+  // printf("Image size: %d\n", image.size());
 
   // Write data into the memory object
   err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
@@ -264,8 +264,6 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  clFinish(command_queue);
-
   CImg<unsigned char> image_out(width, height, 1, spectrum);
   printf("Image size: %d\n", image_out.size());
 
@@ -274,6 +272,8 @@ int main(int argc, char** argv)
                             image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
+  
+  end_k = clock();
 
   // Display the image
   image_out.display("Image flip");
@@ -281,17 +281,16 @@ int main(int argc, char** argv)
   // Save the image
   image_out.save("lenna_flip.jpeg");
 
-  end_k = clock();
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
-  double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) / time_kernel;
+  double bandwidth = (double) (sizeof(unsigned char)*img_size*2) + (sizeof(int)*2) / time_kernel;
 
   // Trhoughput of the kernel in terms of pixels flipped per second
-  double throughput = (double) (image.width() * image.height()) / time_kernel;
+  double throughput = (double) (width*height) / time_kernel;
 
   // Memory footprint
-  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2 + 3 * sizeof(int) + sizeof(size_t) ); // image + image_out + vars_dim_image
+  size_t local_memory_footprint = (size_t) ((sizeof(unsigned char)*img_size*2) + (sizeof(int)*2));
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
   err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
@@ -299,7 +298,7 @@ int main(int argc, char** argv)
   err = clGetMemObjectInfo(out_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(int)*2;
 
   // Release OpenCL resources
 

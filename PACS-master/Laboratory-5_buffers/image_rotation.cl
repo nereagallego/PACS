@@ -1,5 +1,10 @@
-__kernel void image_rotation(__global unsigned char* input, __global unsigned char* output, 
-    const int width, const int height, const float angle) {
+__kernel void image_rotation(
+    __global unsigned char* input,
+    __global unsigned char* output, 
+    const int width,
+    const int height,
+    const float angle) {
+        
     int x = get_global_id(0);
     int y = get_global_id(1);
     float centerX = width / 2.0f;

@@ -303,8 +303,6 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  // clFinish(command_queue);
-
   err = clEnqueueReadBuffer(command_queue, redBuffer, CL_TRUE, 0, sizeof(unsigned int) *
                             histogramSize, redHistogram.data(), 0, NULL, NULL);
   cl_error(err, "Failed to read red histogram from the device\n");
@@ -317,17 +315,21 @@ int main(int argc, char** argv)
   printf("Data read from device\n");
 
   end_k = clock();
+
+  // Plot histograms
+  plotHistogram(redHistogram, greenHistogram, blueHistogram);
+
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
-  double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) / time_kernel;
+  double bandwidth = (double) (sizeof(unsigned char)*img_size) + (sizeof(unsigned int) * histogramSize * 3) + 2 * sizeof(int) / time_kernel;
 
   // Trhoughput of the kernel in terms of number of pixels processed per second
-  double throughput = (double) (image.width() * image.height()) / time_kernel;
+  double throughput = (double) (width*height) / time_kernel;
 
   // Memory footprint
   // Local memory footprint
-  size_t local_memory_footprint = (size_t) image.width() * image.height() * 4 * sizeof(unsigned char) + histogramSize*3*sizeof(unsigned int) + 2 * sizeof(int) + sizeof(size_t); // image + histogram buffers
+  size_t local_memory_footprint = (size_t) (sizeof(unsigned char)*img_size) + histogramSize*3*sizeof(unsigned int) + 2 * sizeof(int); // image + histogram buffers
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_hist = 0.0;
   err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
@@ -336,7 +338,7 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to get memory object info\n");
   size_t kernel_memory_footprint_out = kernel_memory_footprint_hist * 3;
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + 2 * sizeof(int);;
 
   // Print histograms
   // for (int i = 0; i < histogramSize; i++){
@@ -344,9 +346,6 @@ int main(int argc, char** argv)
   //   printf("Green[%d]: %d\n", i, greenHistogram[i]);
   //   printf("Blue[%d]: %d\n", i, blueHistogram[i]);
   // }
-
-  // Plot histograms
-  plotHistogram(redHistogram, greenHistogram, blueHistogram);
 
   // Release OpenCL resources
 

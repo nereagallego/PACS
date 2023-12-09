@@ -1,23 +1,24 @@
 # IMAGE flip
 
-Kernel time: 0.051495
-Overall time: 0.332368
-Bandwidth: 40725351.975920
-Throughput: 5090668.996990
-Memory footprint: 3670036
+Kernel time: 0.001710
+Overall time: 0.281246
+Bandwidth: 1577542.362573
+Throughput: 153300584.795322
+Memory footprint: 3145744
+
 
 # HISTOGRAM
 
-Kernel time: 0.003488
-Overall time: 0.320476
-Bandwidth: 601247706.422018
-Throughput: 75155963.302752
-Memory footprint: 1841168
+Kernel time: 0.008464
+Overall time: 0.198432
+Bandwidth: 790449.179584
+Throughput: 30971644.612476
+Memory footprint: 1579024
 
 # IMAGE rotation
 
-Kernel time: 0.002608
-Overall time: 0.441644
-Bandwidth: 2098685.742331
-Throughput: 100515337.423313
-Memory footprint: 3670044
+Kernel time: 0.009384
+Overall time: 0.353145
+Bandwidth: 1573720.514919
+Throughput: 27935208.866155
+Memory footprint: 3145752
