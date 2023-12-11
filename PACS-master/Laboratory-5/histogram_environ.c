@@ -69,6 +69,8 @@ void plotHistogram(const std::vector<unsigned int>& redHistogram,
         histImage.draw_rectangle(margin + i * histWidth, histHeight + margin - blueHeight, margin + (i + 1) * histWidth - 1, histHeight + margin - 1, blue);
     }
 
+    histImage.save("histogram.jpeg");
+
     // Display histogram image
     CImgDisplay disp(histImage, "RGB Histograms");
     while (!disp.is_closed()) {
@@ -250,26 +252,17 @@ int main(int argc, char** argv)
 
   // Create and initialize the input and output arrays at the host memory
   CImg<unsigned char> image("lenna.jpeg");
-  
-  // Create OpenCl image memory objects
-  cl_image_format format;
-  format.image_channel_order = CL_RGBA;
-  format.image_channel_data_type = CL_UNSIGNED_INT8;
 
-  cl_image_desc desc;
-  desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-  desc.image_width = image.width();
-  desc.image_height = image.height();
-  desc.image_depth = 0;
-  desc.image_array_size = 0;
-  desc.image_row_pitch = 0;
-  desc.image_slice_pitch = 0;
-  desc.num_mip_levels = 0;
-  desc.num_samples = 0;
-  desc.buffer = NULL;
+  int width = image.width();
+  int height = image.height();
 
-  cl_mem in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
-  cl_error(err, "Failed to create input image memory object\n");
+  // Create OpenCL buffer memory objects
+  size_t img_size = image.size(); // 4 for RGBA channels
+
+  cl_mem in_device_object;
+  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+  cl_error(err, "Failed to create memory buffer at device 3.0\n");
+
   // Create OpenCL buffers for histograms
   const int histogramSize = 256;
   std::vector<unsigned int> redHistogram(histogramSize, 0);
@@ -283,11 +276,8 @@ int main(int argc, char** argv)
   cl_mem blueBuffer=clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int) * histogramSize, blueHistogram.data(), &err);
   cl_error(err, "Failed to create blue histogram buffer\n");
 
-  const size_t origin[3] = {0, 0, 0};
-  const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
-  err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, origin,
-                            region, sizeof(unsigned char) * image.width()*4, 0, image.data(), 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
 
   // Set the arguments to our compute kernel
@@ -299,11 +289,13 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to set kernel arguments\n");
   err = clSetKernelArg(kernel, 3, sizeof(cl_mem), &blueBuffer);
   cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 4, sizeof(int), &width);
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 5, sizeof(int), &height);
+  cl_error(err, "Failed to set kernel arguments\n");
 
-  // Laucnh kernel
-  const size_t global_size[2] = {image.width(), image.height()};
-  printf("Local size: %d\n", local_size);
-  printf("Global size: %d\n", global_size[0] * global_size[1]);
+  // Launch kernel
+  const size_t global_size[2] = {static_cast<size_t>(image.width()), static_cast<size_t>(image.height())};
 
   start_k = clock();
 
@@ -323,17 +315,21 @@ int main(int argc, char** argv)
   printf("Data read from device\n");
 
   end_k = clock();
+
+  // Plot histograms
+  plotHistogram(redHistogram, greenHistogram, blueHistogram);
+
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
-  double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) / time_kernel;
+  double bandwidth = (double) (sizeof(unsigned char)*img_size) + (sizeof(unsigned int) * histogramSize * 3) + 2 * sizeof(int) / time_kernel;
 
   // Trhoughput of the kernel in terms of number of pixels processed per second
-  double throughput = (double) (image.width() * image.height()) / time_kernel;
+  double throughput = (double) (width*height) / time_kernel;
 
   // Memory footprint
   // Local memory footprint
-  size_t local_memory_footprint = (size_t) image.width() * image.height() * 4 * sizeof(unsigned char) + histogramSize*3*sizeof(unsigned int); // image + histogram buffers
+  size_t local_memory_footprint = (size_t) (sizeof(unsigned char)*img_size) + histogramSize*3*sizeof(unsigned int) + 2 * sizeof(int); // image + histogram buffers
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_hist = 0.0;
   err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
@@ -342,7 +338,7 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to get memory object info\n");
   size_t kernel_memory_footprint_out = kernel_memory_footprint_hist * 3;
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + 2 * sizeof(int);;
 
   // Print histograms
   // for (int i = 0; i < histogramSize; i++){
@@ -350,9 +346,6 @@ int main(int argc, char** argv)
   //   printf("Green[%d]: %d\n", i, greenHistogram[i]);
   //   printf("Blue[%d]: %d\n", i, blueHistogram[i]);
   // }
-
-  // Plot histograms
-  plotHistogram(redHistogram, greenHistogram, blueHistogram);
 
   // Release OpenCL resources
 

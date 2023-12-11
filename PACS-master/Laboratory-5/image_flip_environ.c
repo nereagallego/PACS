@@ -221,90 +221,76 @@ int main(int argc, char** argv)
   // Create and initialize the input and output arrays at the host memory
   CImg<unsigned char> image("lenna.jpeg");
 
-  // Create OpenCL image memory objects
-  cl_image_format format;
-  format.image_channel_order = CL_RGBA;
-  format.image_channel_data_type = CL_UNSIGNED_INT8;
+  int width = image.width();
+  int height = image.height();
+  int spectrum = image.spectrum();
 
-  cl_image_desc desc;
-  desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-  desc.image_width = image.width();
-  desc.image_height = image.height();
-  desc.image_depth = 0;
-  desc.image_array_size = 0;
-  desc.image_row_pitch = 0;
-  desc.image_slice_pitch = 0;
-  desc.num_mip_levels = 0;
-  desc.num_samples = 0;
-  desc.buffer = NULL;
+  // Create OpenCL buffer memory objects
+  size_t img_size = image.size();
 
   cl_mem in_device_object;
   cl_mem out_device_object;
 
-  
-  in_device_object = clCreateImage(context, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
-  cl_error(err, "Failed to create memory image at device 3.0\n");
-  out_device_object = clCreateImage(context, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
-  cl_error(err, "Failed to create memory image at device 3.0 \n");
+  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+  cl_error(err, "Failed to create memory buffer at device 3.0\n");
+  out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+  cl_error(err, "Failed to create memory buffer at device 3.0 \n");
 
-  // imaage size
-  printf("Image size: %d\n", image.size());
+  // Image size
+  // printf("Image size: %d\n", image.size());
 
-  const size_t origin[3] = {0, 0, 0};
-  const size_t region[3] = {image.width(), image.height(), 1};
   // Write data into the memory object
-  err = clEnqueueWriteImage(command_queue, in_device_object, CL_TRUE, 
-                            origin, region, 0, 
-                            0, image.data(), 0, NULL, NULL);
+  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a write command\n");
- // Create and initialize the input and output arrays at the host memory
 
   // Set the arguments to the kernel
   err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
-  cl_error(err, "Failed to set argument 0\n");
+  cl_error(err, "Failed to set kernel arguments\n");
   err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
-  cl_error(err, "Failed to set argument 1\n");
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 2, sizeof(int), &width);
+  cl_error(err, "Failed to set kernel arguments\n");
+  err = clSetKernelArg(kernel, 3, sizeof(int), &height);
+  cl_error(err, "Failed to set kernel arguments\n");
+
 
   // Launch kernel
-  // local_size = 64;
-  const size_t global_size[2] = {image.width() , image.height()};
-  // NDRange kernel launch = 2D grid of work items
-  // printf("Local size: %d\n", local_size);
-  printf("Global size: %zu\n", global_size);
+  // const size_t global_size[3] = {static_cast<size_t>(width) , static_cast<size_t>(height), static_cast<size_t>(spectrum)};
+  const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
 
   start_k = clock();
-  
+
   err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
   cl_error(err, "Failed to launch kernel to the device\n");
   printf("Kernel launched\n");
 
-  clFinish(command_queue);
-  
-  CImg<unsigned char> image_out(image.width(), image.height(), 1, 4, 0);
-    // imaage size
+  CImg<unsigned char> image_out(width, height, 1, spectrum);
   printf("Image size: %d\n", image_out.size());
 
   // Read data from device memory to host memory
-  err = clEnqueueReadImage(command_queue, out_device_object, CL_TRUE, 
-                            origin, region, 0, 
-                            0, image_out.data(), 0, NULL, NULL);
+  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0,sizeof(unsigned char)*img_size, 
+                            image_out.data(), 0, NULL, NULL);
   cl_error(err, "Failed to enqueue a read command\n\n");
   printf("Data read from device\n");
+  
+  end_k = clock();
 
   // Display the image
   image_out.display("Image flip");
 
-  end_k = clock();
+  // Save the image
+  image_out.save("lenna_flip.jpeg");
+
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
-  double bandwidth = (double) (image.width() * image.height() * 4 * sizeof(unsigned char)*2) / time_kernel;
+  double bandwidth = (double) (sizeof(unsigned char)*img_size*2) + (sizeof(int)*2) / time_kernel;
 
   // Trhoughput of the kernel in terms of pixels flipped per second
-  double throughput = (double) (image.width() * image.height()) / time_kernel;
+  double throughput = (double) (width*height) / time_kernel;
 
   // Memory footprint
-  size_t local_memory_footprint = (size_t) (image.width() * image.height() * 4 * sizeof(unsigned char)*2); // image + image_out
+  size_t local_memory_footprint = (size_t) ((sizeof(unsigned char)*img_size*2) + (sizeof(int)*2));
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
   err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
@@ -312,7 +298,7 @@ int main(int argc, char** argv)
   err = clGetMemObjectInfo(out_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out;
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(int)*2;
 
   // Release OpenCL resources
 

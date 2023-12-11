@@ -1,34 +1,39 @@
 __kernel void image_rotation(
-  __read_only image2d_t inputImage,
-  __write_only image2d_t outputImage,
-  float angle) {
-
-  const int2 gid = (int2)(get_global_id(0), get_global_id(1));
-
-  int imageWidth = get_image_width(inputImage);
-  int imageHeight = get_image_height(inputImage);
-
-  // Calculate the center of the input image
-  float centerX = 0.5f * imageWidth;
-  float centerY = 0.5f * imageHeight;
-
-  // Calculate relative coordinates from center
-  float relativeX = gid.x - centerX;
-  float relativeY = gid.y - centerY;
-
-  // Calculate rotated coordinates using the provided rotation equations
-  float cosA = cos(angle);
-  float sinA = sin(angle);
-  float rotatedX = cosA * relativeX - sinA * relativeY + centerX;
-  float rotatedY = sinA * relativeX + cosA * relativeY + centerY;
-
-  // Calculate output pixel
-  int2 rotatedCoords = (int2)(rotatedX, rotatedY);
-
-  if (rotatedCoords.x >= 0 && rotatedCoords.x < imageWidth &&
-      rotatedCoords.y >= 0 && rotatedCoords.y < imageHeight) {
-    // Read the pixel from the input image and write it to the output image
-    uint4 pixel = read_imageui(inputImage, rotatedCoords);
-    write_imageui(outputImage, gid, pixel);
-  }
+    __global unsigned char* input,
+    __global unsigned char* output, 
+    const int width,
+    const int height,
+    const float angle) {
+        
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    float centerX = width / 2.0f;
+    float centerY = height / 2.0f;
+    float s = sin(angle);
+    float c = cos(angle);
+    float newX = (x - centerX) * c - (y - centerY) * s + centerX;
+    float newY = (x - centerX) * s + (y - centerY) * c + centerY;
+    // bilinear interpolation based on nearest neighbors
+    int x1 = floor(newX);
+    int y1 = floor(newY);
+    int x2 = x1 + 1;
+    int y2 = y1 + 1;
+    float dx = newX - x1;
+    float dy = newY - y1;
+    for(int i = 0; i < 3; i++) {
+        int index1 = (y1 * width + x1) + i * width * height;
+        int index2 = (y1 * width + x2) + i * width * height;
+        int index3 = (y2 * width + x1) + i * width * height;
+        int index4 = (y2 * width + x2) + i * width * height;
+        float value1 = (x1 < width && y1 < height) ? input[index1] : 0;
+        float value2 = (x2 < width && y1 < height) ? input[index2] : 0;
+        float value3 = (x1 < width && y2 < height) ? input[index3] : 0;
+        float value4 = (x2 < width && y2 < height) ? input[index4] : 0;
+        float value = value1 * (1 - dx) * (1 - dy) + value2 * dx * (1 - dy) + value3 * (1 - dx) * dy + value4 * dx * dy;
+        int index = (y * width + x) + i * width * height;
+        if(newX >= 0 && newX < width && newY >= 0 && newY < height)
+            output[index] = (unsigned char)value;
+        else
+            output[index] = 0;
+    }
 }

@@ -1,19 +1,18 @@
-__kernel void histogram(__read_only image2d_t inputImage,
-                                 __global uint *redHistogram,
-                                 __global uint *greenHistogram,
-                                 __global uint *blueHistogram) {
+__kernel void histogram(__global unsigned char* inputImage,
+                        __global unsigned int *redHistogram,
+                        __global unsigned int *greenHistogram,
+                        __global unsigned int *blueHistogram,
+                        const int width,
+                        const int height) {
 
     const int2 gid = (int2)(get_global_id(0), get_global_id(1));
-    int width = get_image_width(inputImage);
-    int height = get_image_height(inputImage);
 
-    if (gid[0] < width && gid[1] < height) {
-        uint4 pixel = read_imageui(inputImage, gid);
+    if (gid.x < width && gid.y < height) {
         
         // Extracting individual color channels
-        uint red = pixel.x;
-        uint green = pixel.y;
-        uint blue = pixel.z;
+        const unsigned char red = inputImage[(gid.y * width + gid.x)];
+        const unsigned char green = inputImage[(gid.y * width + gid.x) + width * height];
+        const unsigned char blue = inputImage[(gid.y * width + gid.x) + 2 * width * height];
 
         // Incrementing histogram bins
         atomic_inc(&redHistogram[red]);
