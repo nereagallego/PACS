@@ -1,3 +1,4 @@
+ 
 ////////////////////////////////////////////////////////////////////
 //File: image_flip_environ.c
 //
@@ -144,41 +145,52 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
-  // Select a platform with version at least 2.0
-  int platform_selected = -1;
-  int platform_12 = -1;
-  bool found = false;
+  // Select two platforms with version at least 2.0
+  int platforms_selected[2] = {-1, -1};
+  int found = 0;
   for (int i = 0; i < n_platforms; i++){
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
-    if (str_buffer[7] == '1'){
-      platform_12= i;
-    }
-    else if (str_buffer[7] >= '2'){
-      platform_selected = i;
-      found = true;
+    if (str_buffer[7] >= '2'){
+      platforms_selected[found] = i;
+      found++;
       printf("Platform with OpenCL >= 2.0 selected!\n");
-      break;
+      if (found == 2) {
+        break;
+      }
     }
   }
 
-  if (!found){
-    printf("Platform with OpenCL >= 2.0 not found.\n");
+  if (found < 2){
+    printf("Two platforms with OpenCL >= 2.0 not found.\n");
     exit(-1);
-    // platform_selected = platform_12;
   }
 
-  // 3. Create a context, with a device
-  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
-  context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
-  cl_error(err, "Failed to create a compute context\n");
-  printf("Context created\n");
+  // Select the first device of each platform
+  int devices_selected[2] = {-1, -1};
+  for (int i = 0; i < 2; i++){
+    devices_selected[i] = 0;
+  }
+  
 
-  // 4. Create a command queue
+  // Create two contexts and command queues, one for each platform and device
+  cl_context context[2];
+  cl_command_queue command_queue[2];
   cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
-  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[platform_selected][0], proprt, &err);
-  cl_error(err, "Failed to create a command queue\n");
-  printf("Command queue created\n");
+
+  for (int i = 0; i < 2; i++) {
+    // Create a context for the platform
+    cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };
+    context[i] = clCreateContext(properties, 1, &devices_ids[devices_selected[i]], NULL, NULL, &err);
+    cl_error(err, "Failed to create a compute context\n");
+    printf("Context for platform %d created\n", i);
+
+    // Create a command queue for the device
+    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[devices_selected[i]], proprt, &err);
+    cl_error(err, "Failed to create a command queue\n");
+    printf("Command queue for platform %d created\n", i);
+}
+
 
   // Calculate size of the file
   FILE *fileHandler = fopen("image_flip.cl", "r");
@@ -218,68 +230,65 @@ int main(int argc, char** argv)
   cl_error(err, "Failed to create kernel from the program\n");
   printf("Kernel created\n");
 
-  // Create and initialize the input and output arrays at the host memory
-  CImg<unsigned char> image("lenna.jpeg");
+  // Replicate the image 5000 times
+  std::vector<CImg<unsigned char>> images(5000, CImg<unsigned char>("lenna.jpeg"));
 
-  int width = image.width();
-  int height = image.height();
-  int spectrum = image.spectrum();
+  // Get the properties from the first image
+  int width = images[0].width();
+  int height = images[0].height();
+  int spectrum = images[0].spectrum();
 
   // Create OpenCL buffer memory objects
-  size_t img_size = image.size();
+  size_t img_size = width * height * spectrum;
 
-  cl_mem in_device_object;
-  cl_mem out_device_object;
+  // Create two memory buffers for each context
+  cl_mem in_device_object[2];
+  cl_mem out_device_object[2];
+  for (int i = 0; i < 2; i++) {
+      in_device_object[i] = clCreateBuffer(context[i], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+      cl_error(err, "Failed to create memory buffer at device\n");
+      out_device_object[i] = clCreateBuffer(context[i], CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+      cl_error(err, "Failed to create memory buffer at device\n");
+  }
 
-  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
-  cl_error(err, "Failed to create memory buffer at device 3.0\n");
-  out_device_object = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
-  cl_error(err, "Failed to create memory buffer at device 3.0 \n");
+  // Loop over the images and enqueue the kernel execution commands to the appropriate command queue
+  for (int i = 0; i < 5000; i++) {
+    int device_index = i % 2; // Use this to alternate between the two devices
 
-  // Image size
-  // printf("Image size: %d\n", image.size());
+    // Write data into the memory object
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[device_index], CL_TRUE, 0, sizeof(unsigned char)*img_size, images[i].data(), 0, NULL, NULL);
+    cl_error(err, "Failed to enqueue a write command\n");
 
-  // Write data into the memory object
-  err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
-  cl_error(err, "Failed to enqueue a write command\n");
+    // Set the arguments to the kernel
+    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object[device_index]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object[device_index]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel, 2, sizeof(int), &width);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel, 3, sizeof(int), &height);
+    cl_error(err, "Failed to set kernel arguments\n");
 
-  // Set the arguments to the kernel
-  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object);
-  cl_error(err, "Failed to set kernel arguments\n");
-  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object);
-  cl_error(err, "Failed to set kernel arguments\n");
-  err = clSetKernelArg(kernel, 2, sizeof(int), &width);
-  cl_error(err, "Failed to set kernel arguments\n");
-  err = clSetKernelArg(kernel, 3, sizeof(int), &height);
-  cl_error(err, "Failed to set kernel arguments\n");
+    // Launch kernel
+    const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
+    cl_error(err, "Failed to launch kernel to the device\n");
+    printf("Kernel launched for image %d\n", i);
 
-
-  // Launch kernel
-  // const size_t global_size[3] = {static_cast<size_t>(width) , static_cast<size_t>(height), static_cast<size_t>(spectrum)};
-  const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
-
-  start_k = clock();
-
-  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
-  cl_error(err, "Failed to launch kernel to the device\n");
-  printf("Kernel launched\n");
-
-  CImg<unsigned char> image_out(width, height, 1, spectrum);
-  printf("Image size: %d\n", image_out.size());
-
-  // Read data from device memory to host memory
-  err = clEnqueueReadBuffer(command_queue, out_device_object, CL_TRUE, 0,sizeof(unsigned char)*img_size, 
-                            image_out.data(), 0, NULL, NULL);
-  cl_error(err, "Failed to enqueue a read command\n\n");
-  printf("Data read from device\n");
+    // Read data from device memory to host memory
+    err = clEnqueueReadBuffer(command_queue[device_index], out_device_object[device_index], CL_TRUE, 0,sizeof(unsigned char)*img_size, 
+                              images[i].data(), 0, NULL, NULL);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+    printf("Data read from device for image %d\n", i);
+  }
   
   end_k = clock();
 
-  // Display the image
-  image_out.display("Image flip");
+  // Display the first image
+  images[0].display("Image flip");
 
-  // Save the image
-  image_out.save("lenna_flip.jpeg");
+  // Save the first image
+  images[0].save("lenna_flip.jpeg");
 
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
