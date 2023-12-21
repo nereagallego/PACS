@@ -35,6 +35,19 @@ void cl_error(cl_int code, const char *string){
 }
 ////////////////////////////////////////////////////////////////////////////////
 
+CImg<unsigned char>* new_image(const char* filename) {
+    CImg<unsigned char>* img = (CImg<unsigned char>*)malloc(sizeof(CImg<unsigned char>));
+    if (img == NULL) {
+        fprintf(stderr, "Failed to allocate memory for image\n");
+        exit(1);
+    }
+
+    // Initialize the image with the file
+    *img = CImg<unsigned char>(filename);
+
+    return img;
+}
+
 int main(int argc, char** argv)
 {
   
@@ -59,9 +72,8 @@ int main(int argc, char** argv)
   cl_uint n_devices[num_platforms_ids];				// effective number of devices in use for each platform
 	
   cl_device_id device_id;             				// compute device id 
-  cl_context context;                 				// compute context
-  cl_command_queue command_queue;     				// compute command queue
-  
+  cl_context context[2];
+  cl_command_queue command_queue[2];
   
   cl_ulong host_timer_resolution;					// host timer resolution
 
@@ -174,19 +186,18 @@ int main(int argc, char** argv)
   
 
   // Create two contexts and command queues, one for each platform and device
-  cl_context context[2];
-  cl_command_queue command_queue[2];
   cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
 
   for (int i = 0; i < 2; i++) {
     // Create a context for the platform
     cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };
-    context[i] = clCreateContext(properties, 1, &devices_ids[devices_selected[i]], NULL, NULL, &err);
+    _cl_device_id* selected_device = devices_ids[i][devices_selected[i]];
+    context[i] = clCreateContext(properties, 1, &selected_device, NULL, NULL, &err);
     cl_error(err, "Failed to create a compute context\n");
     printf("Context for platform %d created\n", i);
 
     // Create a command queue for the device
-    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[devices_selected[i]], proprt, &err);
+    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[i][devices_selected[i]], proprt, &err);
     cl_error(err, "Failed to create a command queue\n");
     printf("Command queue for platform %d created\n", i);
 }
@@ -208,35 +219,53 @@ int main(int argc, char** argv)
   fread(sourceCode, sizeof(char), fileSize, fileHandler);
   fclose(fileHandler);
 
-  // Create program from buffer
-  cl_program program = clCreateProgramWithSource(context, 1, (const char**)&sourceCode, &fileSize, &err);
-  cl_error(err, "Failed to create program with source\n");
-  free(sourceCode);
+  cl_program program[2];
 
-  // Build the executable and check errors
-  err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-  if (err != CL_SUCCESS){
-    size_t len;
-    char buffer[2048];
-
-    printf("Error: Some error at building process.\n");
-    clGetProgramBuildInfo(program, devices_ids[0][0], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-    printf("%s\n", buffer);
-    exit(-1);
+  for (int i = 0; i < 2; i++) {
+      // Create program from buffer for each context
+      program[i] = clCreateProgramWithSource(context[i], 1, (const char**)&sourceCode, &fileSize, &err);
+      if (err != CL_SUCCESS) {
+          fprintf(stderr, "Failed to create program with source for context %d\n", i);
+          exit(1);
+      }
   }
 
-  // Create a compute kernel with the program we want to run
-  cl_kernel kernel = clCreateKernel(program, "image_flip", &err);
-  cl_error(err, "Failed to create kernel from the program\n");
-  printf("Kernel created\n");
+  free(sourceCode);
 
-  // Replicate the image 5000 times
-  std::vector<CImg<unsigned char>> images(5000, CImg<unsigned char>("lenna.jpeg"));
+  for (int i = 0; i < 2; i++) {
+    // Build the executable for each program and check errors
+    err = clBuildProgram(program[i], 0, NULL, NULL, NULL, NULL);
+    if (err != CL_SUCCESS){
+        size_t len;
+        char buffer[2048];
+
+        printf("Error: Some error at building process for program %d.\n", i);
+        clGetProgramBuildInfo(program[i], devices_ids[i][devices_selected[i]], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+        printf("%s\n", buffer);
+        exit(-1);
+    }
+}
+
+  // Create a compute kernel with the program we want to run
+  cl_kernel kernel[2];
+  for (int i = 0; i < 2; i++) {
+      kernel[i] = clCreateKernel(program[i], "image_flip", &err);
+      cl_error(err, "Failed to create kernel from the program\n");
+      printf("Kernel %d created\n", i);
+  }
+
+  // Allocate memory for 5000 pointers to images
+  CImg<unsigned char>** images = (CImg<unsigned char>**)malloc(5000 * sizeof(CImg<unsigned char>*));
+
+  // Initialize each pointer with a new image
+  for (int i = 0; i < 5000; i++) {
+    images[i] = new_image("lenna.jpeg");
+  }
 
   // Get the properties from the first image
-  int width = images[0].width();
-  int height = images[0].height();
-  int spectrum = images[0].spectrum();
+  int width = images[0]->width();
+  int height = images[0]->height();
+  int spectrum = images[0]->spectrum();
 
   // Create OpenCL buffer memory objects
   size_t img_size = width * height * spectrum;
@@ -256,28 +285,28 @@ int main(int argc, char** argv)
     int device_index = i % 2; // Use this to alternate between the two devices
 
     // Write data into the memory object
-    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[device_index], CL_TRUE, 0, sizeof(unsigned char)*img_size, images[i].data(), 0, NULL, NULL);
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[device_index], CL_TRUE, 0, sizeof(unsigned char)*img_size, images[i]->data(), 0, NULL, NULL);
     cl_error(err, "Failed to enqueue a write command\n");
 
     // Set the arguments to the kernel
-    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &in_device_object[device_index]);
+    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[device_index]);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &out_device_object[device_index]);
+    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &out_device_object[device_index]);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(kernel, 2, sizeof(int), &width);
+    err = clSetKernelArg(kernel[device_index], 2, sizeof(int), &width);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(kernel, 3, sizeof(int), &height);
+    err = clSetKernelArg(kernel[device_index], 3, sizeof(int), &height);
     cl_error(err, "Failed to set kernel arguments\n");
 
     // Launch kernel
     const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
-    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, NULL);
     cl_error(err, "Failed to launch kernel to the device\n");
     printf("Kernel launched for image %d\n", i);
 
     // Read data from device memory to host memory
     err = clEnqueueReadBuffer(command_queue[device_index], out_device_object[device_index], CL_TRUE, 0,sizeof(unsigned char)*img_size, 
-                              images[i].data(), 0, NULL, NULL);
+                              images[i]->data(), 0, NULL, NULL);
     cl_error(err, "Failed to enqueue a read command\n\n");
     printf("Data read from device for image %d\n", i);
   }
@@ -285,10 +314,10 @@ int main(int argc, char** argv)
   end_k = clock();
 
   // Display the first image
-  images[0].display("Image flip");
+  images[0]->display("Image flip");
 
   // Save the first image
-  images[0].save("lenna_flip.jpeg");
+  images[0]->save("lenna_flip.jpeg");
 
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
@@ -302,19 +331,21 @@ int main(int argc, char** argv)
   size_t local_memory_footprint = (size_t) ((sizeof(unsigned char)*img_size*2) + (sizeof(int)*2));
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
-  err = clGetMemObjectInfo(in_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
+  err = clGetMemObjectInfo(in_device_object[0], CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
   cl_error(err, "Failed to get memory object info\n");
-  err = clGetMemObjectInfo(out_device_object, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
+  err = clGetMemObjectInfo(out_device_object[0], CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
 
   size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(int)*2;
 
   // Release OpenCL resources
 
-  clReleaseProgram(program);
-  clReleaseKernel(kernel);
-  clReleaseCommandQueue(command_queue);
-  clReleaseContext(context);
+  for (int i = 0; i < 2; i++) {
+      clReleaseProgram(program[i]);
+      clReleaseKernel(kernel[i]);
+      clReleaseCommandQueue(command_queue[i]);
+      clReleaseContext(context[i]);
+  }
 
   end = clock();
   cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
