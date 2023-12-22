@@ -192,15 +192,16 @@ int main(int argc, char** argv)
     // Create a context for the platform
     cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };
     _cl_device_id* selected_device = devices_ids[i][devices_selected[i]];
-    context[i] = clCreateContext(properties, 1, &selected_device, NULL, NULL, &err);
+    // context[i] = clCreateContext(properties, 1, &selected_device, NULL, NULL, &err);
+    context[i] = clCreateContext(properties, 1, devices_ids[platforms_selected[i]], NULL, NULL, &err);
     cl_error(err, "Failed to create a compute context\n");
     printf("Context for platform %d created\n", i);
 
     // Create a command queue for the device
-    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[i][devices_selected[i]], proprt, &err);
+    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[platforms_selected[i]][devices_selected[i]], proprt, &err);
     cl_error(err, "Failed to create a command queue\n");
     printf("Command queue for platform %d created\n", i);
-}
+  }
 
 
   // Calculate size of the file
