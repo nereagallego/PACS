@@ -257,10 +257,21 @@ int main(int argc, char** argv)
 
   // Allocate memory for 5000 pointers to images
   CImg<unsigned char>** images = (CImg<unsigned char>**)malloc(5000 * sizeof(CImg<unsigned char>*));
+  // Check if memory allocation was successful
+  if (images == NULL) {
+      fprintf(stderr, "Failed to allocate memory for image pointers\n");
+      exit(1);
+  }
 
+  CImg<unsigned char> img("lenna.jpeg");
   // Initialize each pointer with a new image
   for (int i = 0; i < 5000; i++) {
-    images[i] = new_image("lenna.jpeg");
+    // images[i] = new_image("lenna.jpeg");
+    images[i] = new CImg<unsigned char>(img);
+    if (images[i] == NULL) {
+        fprintf(stderr, "Failed to create new image for pointer %d\n", i);
+        exit(1);
+    }
   }
 
   // Get the properties from the first image
@@ -303,22 +314,22 @@ int main(int argc, char** argv)
     const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
     err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, NULL);
     cl_error(err, "Failed to launch kernel to the device\n");
-    printf("Kernel launched for image %d\n", i);
+    // printf("Kernel launched for image %d\n", i);
 
     // Read data from device memory to host memory
     err = clEnqueueReadBuffer(command_queue[device_index], out_device_object[device_index], CL_TRUE, 0,sizeof(unsigned char)*img_size, 
                               images[i]->data(), 0, NULL, NULL);
     cl_error(err, "Failed to enqueue a read command\n\n");
-    printf("Data read from device for image %d\n", i);
+    // printf("Data read from device for image %d\n", i);
   }
   
   end_k = clock();
 
   // Display the first image
-  images[0]->display("Image flip");
+  images[1234]->display("Image flip");
 
   // Save the first image
-  images[0]->save("lenna_flip.jpeg");
+  images[1234]->save("lenna_flip.jpeg");
 
   double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
