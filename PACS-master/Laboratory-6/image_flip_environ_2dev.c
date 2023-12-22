@@ -245,7 +245,7 @@ int main(int argc, char** argv)
         printf("%s\n", buffer);
         exit(-1);
     }
-}
+  }
 
   // Create a compute kernel with the program we want to run
   cl_kernel kernel[2];
