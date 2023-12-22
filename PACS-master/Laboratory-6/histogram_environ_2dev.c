@@ -182,35 +182,46 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
-  // Select a platform with version at least 2.0
-  int platform_selected = -1;
-  int platform_12 = -1;
-  bool found = false;
+  // Select two platforms with version at least 2.0
+  int platforms_selected[2] = {-1, -1};
+  int found = 0;
   for (int i = 0; i < n_platforms; i++){
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
-    if (str_buffer[7] == '1'){
-      platform_12= i;
-    }
-    else if (str_buffer[7] >= '2'){
-      platform_selected = i;
-      found = true;
+    if (str_buffer[7] >= '2'){
+      platforms_selected[found] = i;
+      found++;
       printf("Platform with OpenCL >= 2.0 selected!\n");
-      break;
+      if (found == 2) {
+        break;
+      }
     }
   }
 
-  // 3. Create a context, with a device
-  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
-  context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
-  cl_error(err, "Failed to create a compute context\n");
-  printf("Context created\n");
+  if (found < 2){
+    printf("Two platforms with OpenCL >= 2.0 not found.\n");
+    exit(-1);
+  }
 
-  // 4. Create a command queue
-  cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
-  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[platform_selected][0], proprt, &err);
-  cl_error(err, "Failed to create a command queue\n");
-  printf("Command queue created\n");
+  // Select the first device of each platform
+  int devices_selected[2] = {-1, -1};
+  for (int i = 0; i < 2; i++){
+    devices_selected[i] = 0;
+  }
+
+  // Create two contexts and command queues, one for each platform and device
+  for (int i = 0; i < 2; i++) {
+    // Create a context for the platform
+    cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };
+    context[i] = clCreateContext(properties, 1, devices_ids[platforms_selected[i]], NULL, NULL, &err);
+    cl_error(err, "Failed to create a compute context\n");
+    printf("Context for platform %d created\n", i);
+
+    // Create a command queue for the device
+    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[platforms_selected[i]][devices_selected[i]], proprt, &err);
+    cl_error(err, "Failed to create a command queue\n");
+    printf("Command queue for platform %d created\n", i);
+  }
 
   // Calculate size of the file
   FILE *fileHandler = fopen("histogram.cl", "r");
@@ -228,53 +239,90 @@ int main(int argc, char** argv)
   fread(sourceCode, sizeof(char), fileSize, fileHandler);
   fclose(fileHandler);
 
-  // Create program from buffer
-  cl_program program = clCreateProgramWithSource(context, 1, (const char**)&sourceCode, &fileSize, &err);
-  cl_error(err, "Failed to create program with source\n");
+  cl_program program[2];
+
+  for (int i = 0; i < 2; i++) {
+      // Create program from buffer for each context
+      program[i] = clCreateProgramWithSource(context[i], 1, (const char**)&sourceCode, &fileSize, &err);
+      if (err != CL_SUCCESS) {
+          fprintf(stderr, "Failed to create program with source for context %d\n", i);
+          exit(1);
+      }
+  }
+
   free(sourceCode);
 
-  // Build the executable and check errors
-  err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-  if (err != CL_SUCCESS){
-    size_t len;
-    char buffer[2048];
+  for (int i = 0; i < 2; i++) {
+    // Build the executable for each program and check errors
+    err = clBuildProgram(program[i], 0, NULL, NULL, NULL, NULL);
+    if (err != CL_SUCCESS){
+        size_t len;
+        char buffer[2048];
 
-    printf("Error: Some error at building process.\n");
-    clGetProgramBuildInfo(program, devices_ids[0][0], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-    printf("%s\n", buffer);
-    exit(-1);
+        printf("Error: Some error at building process for program %d.\n", i);
+        clGetProgramBuildInfo(program[i], devices_ids[i][devices_selected[i]], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+        printf("%s\n", buffer);
+        exit(-1);
+    }
   }
 
   // Create a compute kernel with the program we want to run
-  cl_kernel kernel = clCreateKernel(program, "histogram", &err);
-  cl_error(err, "Failed to create kernel from the program\n");
-  printf("Kernel created\n");
+  cl_kernel kernel[2];
+  for (int i = 0; i < 2; i++) {
+      kernel[i] = clCreateKernel(program[i], "histogram", &err);
+      cl_error(err, "Failed to create kernel from the program\n");
+      printf("Kernel %d created\n", i);
+  }
 
-  // Create and initialize the input and output arrays at the host memory
-  CImg<unsigned char> image("lenna.jpeg");
+  // Allocate memory for 5000 pointers to images
+  CImg<unsigned char>** images = (CImg<unsigned char>**)malloc(5000 * sizeof(CImg<unsigned char>*));
+  // Check if memory allocation was successful
+  if (images == NULL) {
+      fprintf(stderr, "Failed to allocate memory for image pointers\n");
+      exit(1);
+  }
 
-  int width = image.width();
-  int height = image.height();
+  CImg<unsigned char> img("lenna.jpeg");
+  // Initialize each pointer with a new image
+  for (int i = 0; i < 5000; i++) {
+    // images[i] = new_image("lenna.jpeg");
+    images[i] = new CImg<unsigned char>(img);
+    if (images[i] == NULL) {
+        fprintf(stderr, "Failed to create new image for pointer %d\n", i);
+        exit(1);
+    }
+  }
+
+  // Get the properties from the first image
+  int width = images[0]->width();
+  int height = images[0]->height();
+  int spectrum = images[0]->spectrum();
 
   // Create OpenCL buffer memory objects
-  size_t img_size = image.size(); // 4 for RGBA channels
+  size_t img_size = width * height * spectrum;
 
-  cl_mem in_device_object;
-  in_device_object = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
-  cl_error(err, "Failed to create memory buffer at device 3.0\n");
-
-  // Create OpenCL buffers for histograms
   const int histogramSize = 256;
-  std::vector<unsigned int> redHistogram(histogramSize, 0);
-  std::vector<unsigned int> greenHistogram(histogramSize, 0);
-  std::vector<unsigned int> blueHistogram(histogramSize, 0);
+  const int numHistograms = 2;
+  std::vector<std::vector<unsigned int>> redHistograms(numHistograms, std::vector<unsigned int>(histogramSize, 0));
+  std::vector<std::vector<unsigned int>> greenHistograms(numHistograms, std::vector<unsigned int>(histogramSize, 0));
+  std::vector<std::vector<unsigned int>> blueHistograms(numHistograms, std::vector<unsigned int>(histogramSize, 0));
 
-  cl_mem redBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int) * histogramSize, redHistogram.data(), &err);
-  cl_error(err, "Failed to create red histogram buffer\n");
-  cl_mem greenBuffer= clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int) * histogramSize, greenHistogram.data(), &err);
-  cl_error(err, "Failed to create green histogram buffer\n");
-  cl_mem blueBuffer=clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned int) * histogramSize, blueHistogram.data(), &err);
-  cl_error(err, "Failed to create blue histogram buffer\n");
+  // Create ONE memory buffers for each context
+  cl_mem in_device_object[2];
+  cl_mem redBuffer[2];
+  cl_mem greenBuffer[2];
+  cl_mem blueBuffer[2];
+  for (int i = 0; i < 2; i++) {
+      in_device_object[i] = clCreateBuffer(context[i], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+      cl_error(err, "Failed to create memory buffer at device\n");
+
+      redBuffer[i] = clCreateBuffer(context[i], CL_MEM_READ_WRITE, sizeof(unsigned int) * histogramSize, redHistograms[i].data(), &err);
+      cl_error(err, "Failed to create red histogram buffer\n");
+      greenBuffer[i] = clCreateBuffer(context[i], CL_MEM_READ_WRITE, sizeof(unsigned int) * histogramSize, greenHistograms[i].data(), &err);
+      cl_error(err, "Failed to create green histogram buffer\n");
+      blueBuffer[i] = clCreateBuffer(context[i], CL_MEM_READ_WRITE, sizeof(unsigned int) * histogramSize, blueHistograms[i].data(), &err);
+      cl_error(err, "Failed to create blue histogram buffer\n");
+  }
 
   // Write data into the memory object
   err = clEnqueueWriteBuffer(command_queue, in_device_object, CL_TRUE, 0, sizeof(unsigned char)*img_size, image.data(), 0, NULL, NULL);
