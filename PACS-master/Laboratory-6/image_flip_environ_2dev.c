@@ -75,8 +75,8 @@ int main(int argc, char** argv)
   cl_uint n_devices[num_platforms_ids];				// effective number of devices in use for each platform
 	
   cl_device_id device_id;             				// compute device id 
-  cl_context context[2];
-  cl_command_queue command_queue[2];
+  cl_context context[number_platforms_used];
+  cl_command_queue command_queue[number_platforms_used];
   
   cl_ulong host_timer_resolution;					// host timer resolution
 
@@ -362,11 +362,11 @@ int main(int argc, char** argv)
   err = clGetMemObjectInfo(out_device_object[0], CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(int)*2;
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(int)* number_images;
 
   // Release OpenCL resources
 
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < number_platforms_used; i++) {
       clReleaseProgram(program[i]);
       clReleaseKernel(kernel[i]);
       clReleaseCommandQueue(command_queue[i]);
