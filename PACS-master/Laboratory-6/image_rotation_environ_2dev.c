@@ -48,6 +48,11 @@ int main(int argc, char** argv)
                         	// global domain size for our calculation
   size_t local_size;                       	// local domain size for our calculation
 
+  const int number_platforms_used = 2;			// number of platforms to use
+  const int number_images = 5000;				// number of images to process
+
+  double time_kernel = 0;					// time to execute the kernel
+
   const cl_uint num_platforms_ids = 10;				// max of allocatable platforms
   cl_platform_id platforms_ids[num_platforms_ids];		// array of platforms
   cl_uint n_platforms = 0;						// effective number of platforms in use
@@ -56,8 +61,8 @@ int main(int argc, char** argv)
   cl_uint n_devices[num_platforms_ids];				// effective number of devices in use for each platform
 	
   cl_device_id device_id;             				// compute device id 
-  cl_context context;                 				// compute context
-  cl_command_queue command_queue;     				// compute command queue
+  cl_context context[number_platforms_used];                 				// compute context
+  cl_command_queue command_queue[number_platforms_used];     				// compute command queue
   
   
   cl_ulong host_timer_resolution;					// host timer resolution
@@ -136,22 +141,31 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
-  // Select a platform with version at least 2.0
-  int platform_selected = -1;
-  int platform_12 = -1;
-  bool found = false;
+  // Select two platforms with version at least 2.0
+  int platforms_selected[number_platforms_used] = {-1, -1};
+  int found = 0;
   for (int i = 0; i < n_platforms; i++){
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
-    if (str_buffer[7] == '1'){
-      platform_12= i;
-    }
-    else if (str_buffer[7] >= '2'){
-      platform_selected = i;
-      found = true;
+    if (str_buffer[7] >= '2'){
+      platforms_selected[found] = i;
+      found++;
       printf("Platform with OpenCL >= 2.0 selected!\n");
-      break;
+      if (found == number_platforms_used) {
+        break;
+      }
     }
+  }
+
+  if (found < number_platforms_used){
+    printf("Two platforms with OpenCL >= 2.0 not found.\n");
+    exit(-1);
+  }
+
+  // Select the first device of each platform
+  int devices_selected[number_platforms_used] = {-1, -1};
+  for (int i = 0; i < number_platforms_used; i++){
+    devices_selected[i] = 0;
   }
 
   // Check if rotation angle is given
@@ -160,17 +174,20 @@ int main(int argc, char** argv)
     exit(-1);
   }
 
-  // 3. Create a context, with a device
-  cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platform_selected], 0 };
-  context = clCreateContext(properties, 1, devices_ids[platform_selected], NULL, NULL, &err);
-  cl_error(err, "Failed to create a compute context\n");
-  printf("Context created\n");
-
-  // 4. Create a command queue
+  // Create two contexts and command queues, one for each platform and device
   cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
-  command_queue = clCreateCommandQueueWithProperties(context, devices_ids[platform_selected][0], proprt, &err);
-  cl_error(err, "Failed to create a command queue\n");
-  printf("Command queue created\n");
+  for (int i = 0; i < number_platforms_used; i++) {
+    // Create a context for the platform
+    cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };
+    context[i] = clCreateContext(properties, 1, devices_ids[platforms_selected[i]], NULL, NULL, &err);
+    cl_error(err, "Failed to create a compute context\n");
+    printf("Context for platform %d created\n", i);
+
+    // Create a command queue for the device
+    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[platforms_selected[i]][devices_selected[i]], proprt, &err);
+    cl_error(err, "Failed to create a command queue\n");
+    printf("Command queue for platform %d created\n", i);
+  }
 
   // Calculate size of the file
   FILE *fileHandler = fopen("image_rotation.cl", "r");
@@ -189,36 +206,67 @@ int main(int argc, char** argv)
   fclose(fileHandler);
 
   // Create program from buffer
-  cl_program program = clCreateProgramWithSource(context, 1, (const char**)&sourceCode, &fileSize, &err);
-  cl_error(err, "Failed to create program with source\n");
+  cl_program program[number_platforms_used];
+
+  for (int i = 0; i < number_platforms_used; i++) {
+      // Create program from buffer for each context
+      program[i] = clCreateProgramWithSource(context[i], 1, (const char**)&sourceCode, &fileSize, &err);
+      if (err != CL_SUCCESS) {
+          fprintf(stderr, "Failed to create program with source for context %d\n", i);
+          exit(1);
+      }
+  }
   free(sourceCode);
 
-  // Build the executable and check errors
-  err = clBuildProgram(program, 1, &devices_ids[platform_selected][0], NULL, NULL, NULL);
-  if (err != CL_SUCCESS){
-    size_t len;
-    char buffer[2048];
+  for (int i = 0; i < number_platforms_used; i++) {
+    // Build the executable for each program and check errors
+    err = clBuildProgram(program[i], 0, NULL, NULL, NULL, NULL);
+    if (err != CL_SUCCESS){
+        size_t len;
+        char buffer[2048];
 
-    printf("Error: Some error at building process.\n");
-    clGetProgramBuildInfo(program, devices_ids[platform_selected][0], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-    printf("%s\n", buffer);
-    exit(-1);
+        printf("Error: Some error at building process for program %d.\n", i);
+        clGetProgramBuildInfo(program[i], devices_ids[i][devices_selected[i]], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+        printf("%s\n", buffer);
+        exit(-1);
+    }
   }
 
   // Create a compute kernel with the program we want to run
-  cl_kernel kernel = clCreateKernel(program, "image_rotation", &err);
-  cl_error(err, "Failed to create kernel from the program\n");
-  printf("Kernel created\n");
+  cl_kernel kernel[number_platforms_used];
+  for (int i = 0; i < number_platforms_used; i++) {
+      kernel[i] = clCreateKernel(program[i], "image_rotation", &err);
+      cl_error(err, "Failed to create kernel from the program\n");
+      printf("Kernel %d created\n", i);
+  }
 
-  // Create and initialize the input image
-  CImg<unsigned char> image("lenna.jpeg");
+  // Allocate memory for 5000 pointers to images
+  CImg<unsigned char>** images = (CImg<unsigned char>**)malloc(number_images * sizeof(CImg<unsigned char>*));
+  // Check if memory allocation was successful
+  if (images == NULL) {
+      fprintf(stderr, "Failed to allocate memory for image pointers\n");
+      exit(1);
+  }
 
-  int width = image.width();
-  int height = image.height();
-  int spectrum = image.spectrum();
+  CImg<unsigned char> img("lenna.jpeg");
+  // Initialize each pointer with a new image
+  for (int i = 0; i < number_images; i++) {
+    // images[i] = new_image("lenna.jpeg");
+    images[i] = new CImg<unsigned char>(img);
+    if (images[i] == NULL) {
+        fprintf(stderr, "Failed to create new image for pointer %d\n", i);
+        exit(1);
+    }
+  }
+  printf("Images created\n");
+
+  // Get the properties from the first image
+  int width = images[0]->width();
+  int height = images[0]->height();
+  int spectrum = images[0]->spectrum();
 
   // Create OpenCL buffer memory objects
-  size_t img_size = image.size();
+  size_t img_size = width * height * spectrum;
 
   // Get angle from user and convert to radians
   float angle = atof(argv[1]);
@@ -226,61 +274,67 @@ int main(int argc, char** argv)
   // printf("Angle: %f\n", angle_radians);
 
 
+  cl_mem inputBuffer[number_images];
+  cl_mem outputBuffer[number_images];
+  for (int i = 0; i < number_images; i++) {
+    int device_index = i % number_platforms_used; // Use this to alternate between the two devices 
+
+    inputBuffer[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, img_size * sizeof(unsigned char), NULL, &err);
+    cl_error(err, "Failed to create input buffer\n");
+    outputBuffer[i] = clCreateBuffer(context[device_index], CL_MEM_WRITE_ONLY, img_size * sizeof(unsigned char), NULL, &err);
+    cl_error(err, "Failed to create output buffer\n");
+
+    err = clEnqueueWriteBuffer(command_queue[device_index], inputBuffer[i], CL_TRUE, 0, img_size * sizeof(unsigned char), images[i]->data(), 0, NULL, NULL);
+    cl_error(err, "Failed to enqueue a write command\n");
+    ("Data written to device\n");
+
+    // Set the arguments to the kernel
+    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &inputBuffer[i]);
+    cl_error(err, "Failed to set argument 0\n");
+    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &outputBuffer[i]);
+    cl_error(err, "Failed to set argument 1\n");
+    err = clSetKernelArg(kernel[device_index], 2, sizeof(int), &width);
+    cl_error(err, "Failed to set argument 2\n");
+    err = clSetKernelArg(kernel[device_index], 3, sizeof(int), &height);
+    cl_error(err, "Failed to set argument 3\n");
+    err = clSetKernelArg(kernel[device_index], 4, sizeof(float), &angle_radians);
+    cl_error(err, "Failed to set argument 2\n");
+
+
+    // Launch kernel
+    // local_size = 64;
+    const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
+    // NDRange kernel launch = 2D grid of work items
+    // printf("Local size: %d\n", local_size);
+    // printf("Global size: %d\n", global_size[0] * global_size[1]);
+
+    start_k = clock();
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, NULL);
+    cl_error(err, "Failed to launch kernel to the device\n");
+    printf("Kernel launched\n");
+
+    // CImg<unsigned char> image_out(width, height, 1, spectrum);
+
+    // Read data from device memory to host memory
+    err = clEnqueueReadBuffer(command_queue[device_index], outputBuffer[i], CL_TRUE, 0, img_size * sizeof(unsigned char), images[i]->data(), 0, NULL, NULL);
+    cl_error(err, "Failed to enqueue a read command\n");
+    printf("Data read from device\n");
+    
+
+    end_k = clock();
+
+    time_kernel += ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
+  }
+
   
-  cl_mem inputBuffer = clCreateBuffer(context, CL_MEM_READ_ONLY, img_size * sizeof(unsigned char), NULL, &err);
-  cl_error(err, "Failed to create input buffer\n");
-  cl_mem outputBuffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, img_size * sizeof(unsigned char), NULL, &err);
-  cl_error(err, "Failed to create output buffer\n");
-
-
-  // imaage size
-  // printf("Image size: %d\n", image.size());
-
-  err = clEnqueueWriteBuffer(command_queue, inputBuffer, CL_TRUE, 0, img_size * sizeof(unsigned char), image.data(), 0, NULL, NULL);
-  cl_error(err, "Failed to enqueue a write command\n");
-  printf("Data written to device\n");
- // Create and initialize the input and output arrays at the host memory
-
-  // Set the arguments to the kernel
-  err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputBuffer);
-  cl_error(err, "Failed to set argument 0\n");
-  err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &outputBuffer);
-  cl_error(err, "Failed to set argument 1\n");
-  err = clSetKernelArg(kernel, 2, sizeof(int), &width);
-  cl_error(err, "Failed to set argument 2\n");
-  err = clSetKernelArg(kernel, 3, sizeof(int), &height);
-  cl_error(err, "Failed to set argument 3\n");
-  err = clSetKernelArg(kernel, 4, sizeof(float), &angle_radians);
-  cl_error(err, "Failed to set argument 2\n");
-
-  // Launch kernel
-  // local_size = 64;
-  const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
-  // NDRange kernel launch = 2D grid of work items
-  // printf("Local size: %d\n", local_size);
-  // printf("Global size: %d\n", global_size[0] * global_size[1]);
-
-  start_k = clock();
-  err = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_size, NULL, 0, NULL, NULL);
-  cl_error(err, "Failed to launch kernel to the device\n");
-  printf("Kernel launched\n");
-
-  CImg<unsigned char> image_out(width, height, 1, spectrum);
-
-  // Read data from device memory to host memory
-  err = clEnqueueReadBuffer(command_queue, outputBuffer, CL_TRUE, 0, image_out.size() * sizeof(unsigned char), image_out.data(), 0, NULL, NULL);
-  cl_error(err, "Failed to enqueue a read command\n");
-  printf("Data read from device\n");
-
-  end_k = clock();
 
   // Display the image
-  image_out.display("Image rotation");
+  images[1234]->display("Image rotation");
 
   // Save the image
-  image_out.save("lenna_rotated.jpeg");
+  images[1234]->save("lenna_rotated.jpeg");
 
-  double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
+  // double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
 
   // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
   double bandwidth = (double) (img_size * sizeof(unsigned char) * 2) + sizeof(float) + 2 * sizeof(int) / time_kernel;
@@ -289,22 +343,24 @@ int main(int argc, char** argv)
   double throughput = (double) (width*height) / time_kernel;
 
   // Memory footprint
-  size_t local_memory_footprint = (size_t) (img_size * sizeof(unsigned char) * 2) + sizeof(float) + 2 * sizeof(int);
+  size_t local_memory_footprint = (size_t) (img_size * sizeof(unsigned char) * number_images) + sizeof(float) + 2 * sizeof(int);
   size_t kernel_memory_footprint_in = 0.0;
   size_t kernel_memory_footprint_out = 0.0;
-  err = clGetMemObjectInfo(inputBuffer , CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
+  err = clGetMemObjectInfo(inputBuffer[0] , CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
   cl_error(err, "Failed to get memory object info\n");
-  err = clGetMemObjectInfo(outputBuffer, CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
+  err = clGetMemObjectInfo(outputBuffer[0], CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + 2 * sizeof(int) + sizeof(float);
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in * number_images+ kernel_memory_footprint_out * number_images + 2 * sizeof(int) + sizeof(float);
 
 
   // Release OpenCL resources
-  clReleaseProgram(program);
-  clReleaseKernel(kernel);
-  clReleaseCommandQueue(command_queue);
-  clReleaseContext(context);
+  for (int i = 0; i < number_platforms_used; i++) {
+    clReleaseProgram(program[i]);
+    clReleaseKernel(kernel[i]);
+    clReleaseCommandQueue(command_queue[i]);
+    clReleaseContext(context[i]);
+  }
 
   end = clock();
   cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
