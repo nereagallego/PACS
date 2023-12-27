@@ -81,6 +81,14 @@ int main(int argc, char** argv)
   
   cl_ulong host_timer_resolution;					// host timer resolution
 
+  cl_event kernel_time;
+  cl_event kernel_write_bandwidth;
+  cl_event kernel_read_bandwidth;
+
+  double k_w_bandwidth = 0;
+  double k_r_bandwidth = 0;
+  double k_t = 0;
+
   // 1. Scan the available platforms:
   err = clGetPlatformIDs (num_platforms_ids, platforms_ids, &n_platforms);
   cl_error(err, "Error: Failed to Scan for Platforms IDs");
@@ -302,8 +310,18 @@ int main(int argc, char** argv)
     cl_error(err, "Failed to create memory buffer at device\n");
 
     // Write data into the memory object
-    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_TRUE, 0, sizeof(unsigned char)*img_size, images[i]->data(), 0, NULL, NULL);
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_TRUE, 0, sizeof(unsigned char)*img_size, images[i]->data(), 0, NULL, &kernel_write_bandwidth);
     cl_error(err, "Failed to enqueue a write command\n");
+
+    clWaitForEvents(1, &kernel_write_bandwidth);
+
+    // Get kernel write bandwidth
+    cl_ulong start_w, end_w;
+    err = clGetEventProfilingInfo(kernel_write_bandwidth, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_write_bandwidth, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    k_w_bandwidth += (double) (sizeof(unsigned char)*img_size) / ((double) (end_w - start_w) / 1000000000.0);
 
     // Set the arguments to the kernel
     err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[i]);
@@ -320,16 +338,36 @@ int main(int argc, char** argv)
 
     start_k = clock();
 
-    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, &kernel_time);
     cl_error(err, "Failed to launch kernel to the device\n");
     printf("Kernel launched for image %d\n", i);
+
+    clWaitForEvents(1, &kernel_time);
+
+    // Get kernel execution time
+    cl_ulong start, end;
+    err = clGetEventProfilingInfo(kernel_time, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_time, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    k_t += (double) (end - start) / 1000000000.0;
 
     // Read data from device memory to host memory
     // Should use a new output image for each image
     err = clEnqueueReadBuffer(command_queue[device_index], out_device_object[i], CL_TRUE, 0,sizeof(unsigned char)*img_size, 
-                              images[i]->data(), 0, NULL, NULL);
+                              images[i]->data(), 0, NULL, &kernel_read_bandwidth);
     cl_error(err, "Failed to enqueue a read command\n\n");
     printf("Data read from device for image %d\n", i);
+
+    clWaitForEvents(1, &kernel_read_bandwidth);
+
+    // Get kernel read bandwidth
+    cl_ulong start_r, end_r;
+    err = clGetEventProfilingInfo(kernel_read_bandwidth, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / ((double) (end_r - start_r) / 1000000000.0);
 
     end_k = clock();
     time_kernel += ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
@@ -378,6 +416,10 @@ int main(int argc, char** argv)
   printf("Bandwidth: %f\n", bandwidth);
   printf("Throughput: %f\n", throughput);
   printf("Memory footprint: %zu\n", memory_footprint);
+
+  printf("Kernel write bandwidth: %f\n", k_w_bandwidth / number_images);
+  printf("Kernel read bandwidth: %f\n", k_r_bandwidth / number_images);
+  printf("Kernel time: %f\n", k_t / number_images);
 
   return 0;
 }
