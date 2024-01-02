@@ -28,3 +28,16 @@ Memory footprint: 3165736
 Kernel write bandwidth: 12433738126.138634
 Kernel read bandwidth: 19669444885.956676
 Kernel time: 0.000083
+
+
+Time to create images: 1.194718
+Total kernel time: 2.287528
+Workload for device 0: 0.785664
+Workload for device 1: 0.214336
+Overall time: 11.706101
+Throughput: 0.000000
+Memory footprint: 3165736
+Kernel write bandwidth: 5553717799.780333
+Kernel read bandwidth: 14545335872.831022
+Kernel time: 0.000262
+
