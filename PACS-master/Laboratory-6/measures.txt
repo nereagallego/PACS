@@ -1,43 +1,72 @@
 2-DEVICES:
-Total kernel time: 2.212411
-Workload for device 0: 0.768791
-Workload for device 1: 0.231209
-Overall time: 11.235730
-Throughput: 1902969304.497770
+Time to create images: 1.194733
+Time for device 0: 0.000499
+Probability for device 0: 0.464970
+Time for device 1: 0.000434
+Probability for device 1: 0.535030
+Number of images processed by device 0: 2316
+Number of images processed by device 1: 2684
+Time to launch the kernel: 7.834968
+Time to execute the loop: 1.422332
+Total kernel time: 2.376564
+Workload for device 0: 0.506416
+Workload for device 1: 0.493584
+Overall time: 10.890245
+Throughput: 1591480501.409182
 Memory footprint: 3165736
-Kernel write bandwidth: 6966956687.898340
-Kernel read bandwidth: 15068692660.869072
-Kernel time: 0.000227
+Kernel write bandwidth: 6998100740.577792
+Kernel read bandwidth: 11748120059.167559
+Kernel time: 0.000475
 
 MULTI-CORE:
-Total kernel time: 2.878180
+Time to create images: 1.203375
+Time for device 0: 0.000477
+Probability for device 0: 0.000000
+Number of images processed by device 0: 5000
+Number of images processed by device 1: 0
+Time to launch the kernel: 1.058697
+Time to execute the loop: 11.182576
+Total kernel time: 3.037527
 Workload for device 0: 1.000000
-Overall time: 13.024219
-Throughput: 1079971751.654613
+Overall time: 13.613824
+Throughput: 1294864892.341909
 Memory footprint: 3165736
-Kernel write bandwidth: 6264314450.272058
-Kernel read bandwidth: 12216607105.949671
-Kernel time: 0.000312
+Kernel write bandwidth: 4564351528.397459
+Kernel read bandwidth: 13865483541.204792
+Kernel time: 0.000608
 
 GPU:
-Total kernel time: 0.941197
+Time to create images: 1.187429
+Time for device 0: 0.000436
+Probability for device 0: 0.000000
+Number of images processed by device 0: 5000
+Number of images processed by device 1: 0
+Time to launch the kernel: 5.898157
+Time to execute the loop: 5.769842
+Total kernel time: 1.319211
 Workload for device 0: 1.000000
-Overall time: 13.244864
-Throughput: 3168111939.861883
+Overall time: 13.154884
+Throughput: 2509691173.823040
 Memory footprint: 3165736
-Kernel write bandwidth: 12433738126.138634
-Kernel read bandwidth: 19669444885.956676
-Kernel time: 0.000083
+Kernel write bandwidth: 10688063487.821663
+Kernel read bandwidth: 16154692742.758612
+Kernel time: 0.000264
 
 
-Time to create images: 1.194718
-Total kernel time: 2.287528
-Workload for device 0: 0.785664
-Workload for device 1: 0.214336
-Overall time: 11.706101
-Throughput: 0.000000
+Time to create images: 1.217006
+Probability for device 0: 0.469913
+Probability for device 1: 0.530087
+Number of images processed by device 0: 2336
+Number of images processed by device 1: 2664
+Time to launch the kernel: 8.008295
+Time to execute the loop: 1.403981
+Total kernel time: 2.774162
+Workload for device 0: 0.500333
+Workload for device 1: 0.499667
+Overall time: 11.069731
+Throughput: 991465784.010698
 Memory footprint: 3165736
-Kernel write bandwidth: 5553717799.780333
-Kernel read bandwidth: 14545335872.831022
-Kernel time: 0.000262
+Kernel write bandwidth: 5764032966.063794
+Kernel read bandwidth: 8224142948.872133
+Kernel time: 0.000287
 

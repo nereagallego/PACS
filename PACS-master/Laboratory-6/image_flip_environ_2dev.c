@@ -91,17 +91,6 @@ int main(int argc, char** argv)
   double kernel_throughput = 0;
   double time_device[number_platforms_used];
 
-  // Define a struct to hold device info
-  typedef struct {
-    cl_device_id device;
-    cl_command_queue queue;
-    cl_context context;
-    cl_kernel kernel;
-    cl_event last_event;
-  } DeviceInfo;
-
-  DeviceInfo deviceInfos[number_platforms_used];
-
   // 1. Scan the available platforms:
   err = clGetPlatformIDs (num_platforms_ids, platforms_ids, &n_platforms);
   cl_error(err, "Error: Failed to Scan for Platforms IDs");
@@ -223,17 +212,14 @@ int main(int argc, char** argv)
 
   for (int i = 0; i < number_platforms_used; i++) {
     // Create a context for the platform
-    cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };  
-
-    // Create a command queue for the device
-    // command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[platforms_selected[i]][devices_selected[i]], proprt, &err);
-
-    deviceInfos[i].device = devices_ids[platforms_selected[i]][devices_selected[i]];
-    deviceInfos[i].context = clCreateContext(properties, 1, devices_ids[platforms_selected[i]], NULL, NULL, &err);
+    cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };
+  
+    context[i] = clCreateContext(properties, 1, devices_ids[platforms_selected[i]], NULL, NULL, &err);
     cl_error(err, "Failed to create a compute context\n");
     printf("Context for platform %d created\n", i);
-    deviceInfos[i].queue = clCreateCommandQueueWithProperties(deviceInfos[i].context, deviceInfos[i].device, proprt, &err);
-    deviceInfos[i].last_event = NULL;
+
+    // Create a command queue for the device
+    command_queue[i] = clCreateCommandQueueWithProperties(context[i], devices_ids[platforms_selected[i]][devices_selected[i]], proprt, &err);
     cl_error(err, "Failed to create a command queue\n");
     printf("Command queue for platform %d created\n", i);
   }
@@ -259,7 +245,7 @@ int main(int argc, char** argv)
 
   for (int i = 0; i < number_platforms_used; i++) {
       // Create program from buffer for each context
-      program[i] = clCreateProgramWithSource(deviceInfos[i].context, 1, (const char**)&sourceCode, &fileSize, &err);
+      program[i] = clCreateProgramWithSource(context[i], 1, (const char**)&sourceCode, &fileSize, &err);
       if (err != CL_SUCCESS) {
           fprintf(stderr, "Failed to create program with source for context %d\n", i);
           exit(1);
@@ -276,15 +262,16 @@ int main(int argc, char** argv)
         char buffer[2048];
 
         printf("Error: Some error at building process for program %d.\n", i);
-        clGetProgramBuildInfo(program[i], deviceInfos[i].device, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+        clGetProgramBuildInfo(program[i], devices_ids[i][devices_selected[i]], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
         printf("%s\n", buffer);
         exit(-1);
     }
   }
 
   // Create a compute kernel with the program we want to run
+  cl_kernel kernel[number_platforms_used];
   for (int i = 0; i < number_platforms_used; i++) {
-      deviceInfos[i].kernel = clCreateKernel(program[i], "image_flip", &err);
+      kernel[i] = clCreateKernel(program[i], "image_flip", &err);
       cl_error(err, "Failed to create kernel from the program\n");
       printf("Kernel %d created\n", i);
   }
@@ -329,117 +316,60 @@ int main(int argc, char** argv)
   printf("Time to create images: %f\n", cpu_time_used_imgs);
 
   time_kernel = 0;
-
-  double t_w, t_k, t_r;
-
-  size_t count_device_0 = 0;
-  size_t count_device_1 = 0;
+  
+  clock_t start_kernel, end_kernel;
+  start_kernel = clock();
 
   // Loop over the images and enqueue the kernel execution commands to the appropriate command queue
   cl_mem in_device_object[number_images];
   cl_mem out_device_object[number_images];
-  cl_event last_events[number_platforms_used];
-  DeviceInfo *nextDevice = NULL;
-  for (int i = 0; i < number_images; i++) {
-    // Find the next available device
-    while (nextDevice == NULL) {
-      for (int j = 0; j < number_platforms_used; j++) {
-        // print last event status
-        // printf("Last event status for device %d: %s\n", j, clGetEventInfo(deviceInfos[j].last_event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), NULL, NULL) == CL_COMPLETE ? "CL_COMPLETE" : "CL_INCOMPLETE");
-        cl_int event_status;
-        if (deviceInfos[j].last_event == NULL || 
-            (clGetEventInfo(deviceInfos[j].last_event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &event_status, NULL) == CL_SUCCESS && event_status == CL_COMPLETE)) {
-            nextDevice = &deviceInfos[j];
-            j == 0 ? count_device_0++ : count_device_1++;
-            cl_ulong start_k, end_k;
-
-            if (nextDevice->last_event != NULL) {
-                
-                err = clGetEventProfilingInfo(nextDevice->last_event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_k, NULL);
-                cl_error(err, "Failed to get profiling info\n");
-                err = clGetEventProfilingInfo(nextDevice->last_event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_k, NULL);
-                cl_error(err, "Failed to get profiling info\n");
-                t_k = (double) (end_k - start_k) / 1000000000.0;
-                k_t += t_k;
-                time_device[j] += (t_k);
-            }
-            break;
-        }
-      }
-
-      // If all devices are busy, wait for any one to become available
-      if (nextDevice == NULL) {
-        for (int j = 0; j < number_platforms_used; j++) {
-          last_events[j] = deviceInfos[j].last_event;
-        }
-        //print dimensions of last_events
-        printf("Dimensions of last_events: %d\n", sizeof(last_events) / sizeof(last_events[0]));
-
-        //check if last_events are NULL
-        for (int j = 0; j < number_platforms_used; j++) {
-          printf("Last event for device %d is NULL: %s\n", j, last_events[j] == NULL ? "true" : "false");
-        }
-
-        printf("All devices busy, waiting for any one to become available\n");
-        err = clWaitForEvents(number_platforms_used, last_events);
-        if (err == CL_INVALID_EVENT) {
-          fprintf(stderr, "Invalid event\n");
-          exit(1);
-        }
-      }
+  double prob[number_platforms_used];
+  double total_kernel_time = 0;
+  double t_w, t_k, t_r;
+  int count_device_0 = 0, count_device_1 = 0;
+  for (int i = 0; i < number_platforms_used; i++) {
+    if (i == 0) {
+      count_device_0++;
+    } else {
+      count_device_1++;
     }
-
-    
-
-
-    in_device_object[i] = clCreateBuffer(nextDevice->context, CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    prob[i] = 0;
+    time_device[i] = 0;
+    int device_index = i;
+    in_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
-    out_device_object[i] = clCreateBuffer(nextDevice->context, CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    out_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
 
     // Write data into the memory object
-    err = clEnqueueWriteBuffer(nextDevice->queue, in_device_object[i], CL_FALSE, 0, sizeof(unsigned char)*img_size,
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_FALSE, 0, sizeof(unsigned char)*img_size,
                               images[i]->data(), 0, NULL, &kernel_write_bandwidth[i]);
     cl_error(err, "Failed to enqueue a write command\n");
 
     // Set the arguments to the kernel
-    err = clSetKernelArg(nextDevice->kernel, 0, sizeof(cl_mem), &in_device_object[i]);
+    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[i]);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(nextDevice->kernel, 1, sizeof(cl_mem), &out_device_object[i]);
+    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &out_device_object[i]);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(nextDevice->kernel, 2, sizeof(int), &width);
+    err = clSetKernelArg(kernel[device_index], 2, sizeof(int), &width);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(nextDevice->kernel, 3, sizeof(int), &height);
+    err = clSetKernelArg(kernel[device_index], 3, sizeof(int), &height);
     cl_error(err, "Failed to set kernel arguments\n");
 
     // Launch kernel
     const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
 
-    err = clEnqueueNDRangeKernel(nextDevice->queue, nextDevice->kernel, 2, NULL, global_size, NULL, 0, NULL, &nextDevice->last_event);
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, &kernel_time[i]);
     cl_error(err, "Failed to launch kernel to the device\n");
     // printf("Kernel launched for image %d\n", i);
 
     // Read data from device memory to host memory
     // Should use a new output image for each image
-    err = clEnqueueReadBuffer(nextDevice->queue, out_device_object[i], CL_FALSE, 0,sizeof(unsigned char)*img_size, 
+    err = clEnqueueReadBuffer(command_queue[device_index], out_device_object[i], CL_FALSE, 0,sizeof(unsigned char)*img_size, 
                               images[i]->data(), 0, NULL, &kernel_read_bandwidth[i]);
     cl_error(err, "Failed to enqueue a read command\n\n");
+    // printf("Data read from device for image %d\n", i);
 
-    // Assign the task to nextDevice->device
-    // size_t global_work_size = img_size; // adjust this to your needs
-    // err = clEnqueueNDRangeKernel(nextDevice->queue, kernel, 1, NULL, &global_work_size, NULL, 0, NULL, &nextDevice->last_event);
-    // cl_error(err, "Failed to enqueue kernel\n");
-
-    // After the task is done, update nextDevice->last_event
-    // nextDevice->last_event = kernel_time[i]; // this line is not needed anymore
-    nextDevice = NULL;
-  }
-
-  // Print count of devices used
-  printf("Number of times device 0 was used: %zu\n", count_device_0);
-  printf("Number of times device 1 was used: %zu\n", count_device_1);
-  
-  for (int i = 0; i < number_images; i++) {
     clWaitForEvents(1, &kernel_write_bandwidth[i]);
 
     // Get kernel write bandwidth
@@ -450,6 +380,20 @@ int main(int argc, char** argv)
     cl_error(err, "Failed to get profiling info\n");
     t_w = (double) (end_w - start_w) / 1000000000.0;
     k_w_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_w;
+
+    clWaitForEvents(1, &kernel_time[i]);
+
+    // Get kernel execution time
+    cl_ulong start_k, end_k;
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_k = (double) (end_k - start_k) / 1000000000.0;
+    k_t += t_k;
+
+    // Get kernel throughput
+    kernel_throughput += (double) (width*height) / t_k;
 
     clWaitForEvents(1, &kernel_read_bandwidth[i]);
 
@@ -462,12 +406,131 @@ int main(int argc, char** argv)
     t_r = (double) (end_r - start_r) / 1000000000.0;
     k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
     
-    time_device[i % number_platforms_used] += (t_w + t_r);
+    time_device[i] += (t_w + t_k + t_r);  
+    total_kernel_time += time_device[i];
   }
+
+  
+  for (int i = 0; i < number_platforms_used; i++) {
+    prob[i] = 1 - time_device[i] / total_kernel_time;
+    printf("Time for device %d: %f\n", i, time_device[i]);
+    printf("Probability for device %d: %f\n", i, prob[i]);
+  }
+
+  for (int i = number_platforms_used ; i < number_images; i++) {
+    // Select the device with random uniform distribution
+    double r = (double) rand() / (double) RAND_MAX;
+    double sum = 0.0;
+    int device_index = 0;
+
+    for (int j = 0; j < number_platforms_used; j++) {
+      sum += prob[j];
+      if (r <= sum) {
+        device_index = j;
+        break;
+      }
+    }
+
+    if (device_index == 0) {
+      count_device_0++;
+    } else {
+      count_device_1++;
+    }
+    
+    in_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    out_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+
+    // Write data into the memory object
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_FALSE, 0, sizeof(unsigned char)*img_size,
+                              images[i]->data(), 0, NULL, &kernel_write_bandwidth[i]);
+    cl_error(err, "Failed to enqueue a write command\n");
+
+    // Set the arguments to the kernel
+    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &out_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 2, sizeof(int), &width);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 3, sizeof(int), &height);
+    cl_error(err, "Failed to set kernel arguments\n");
+
+    // Launch kernel
+    const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
+
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, &kernel_time[i]);
+    cl_error(err, "Failed to launch kernel to the device\n");
+    // printf("Kernel launched for image %d\n", i);
+
+    // Read data from device memory to host memory
+    // Should use a new output image for each image
+    err = clEnqueueReadBuffer(command_queue[device_index], out_device_object[i], CL_FALSE, 0,sizeof(unsigned char)*img_size, 
+                              images[i]->data(), 0, NULL, &kernel_read_bandwidth[i]);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+    // printf("Data read from device for image %d\n", i);
+    
+  }
+
+  printf("Number of images processed by device 0: %d\n", count_device_0);
+  printf("Number of images processed by device 1: %d\n", count_device_1);
+
+  end_kernel = clock();
+  double cpu_time_used_kernel = ((double) (end_kernel - start_kernel)) / CLOCKS_PER_SEC;
+  printf("Time to launch the kernel: %f\n", cpu_time_used_kernel);
+  
+  clock_t start_loop, end_loop;
+  start_loop = clock();
+
+  
+  for (int i = number_platforms_used ; i < number_images; i++) {
+    clWaitForEvents(1, &kernel_write_bandwidth[i]);
+
+    // Get kernel write bandwidth
+    cl_ulong start_w, end_w;
+    err = clGetEventProfilingInfo(kernel_write_bandwidth[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_write_bandwidth[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_w = (double) (end_w - start_w) / 1000000000.0;
+    k_w_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_w;
+
+    clWaitForEvents(1, &kernel_time[i]);
+
+    // Get kernel execution time
+    cl_ulong start_k, end_k;
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_k = (double) (end_k - start_k) / 1000000000.0;
+    k_t += t_k;
+
+    // Get kernel throughput
+    kernel_throughput += (double) (width*height) / t_k;
+
+    clWaitForEvents(1, &kernel_read_bandwidth[i]);
+
+    // Get kernel read bandwidth
+    cl_ulong start_r, end_r;
+    err = clGetEventProfilingInfo(kernel_read_bandwidth[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_r = (double) (end_r - start_r) / 1000000000.0;
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+    
+    time_device[i % number_platforms_used] += (t_w + t_k + t_r);                              
+  }
+
+  end_loop = clock();
+  double cpu_time_used_loop = ((double) (end_loop - start_loop)) / CLOCKS_PER_SEC;
+  printf("Time to execute the loop: %f\n", cpu_time_used_loop);
   
   // Workload unbalance
   double workload_device[number_platforms_used];
-  double total_kernel_time = 0;
+  total_kernel_time = 0;
   for (int i = 0; i < number_platforms_used; i++) {
     total_kernel_time += time_device[i];
   }
@@ -510,15 +573,16 @@ int main(int argc, char** argv)
 
   printf("Kernel write bandwidth: %f\n", k_w_bandwidth / number_images);
   printf("Kernel read bandwidth: %f\n", k_r_bandwidth / number_images);
-  printf("Kernel time: %f\n", k_t / number_images);
+  printf("Kernel time: %f\n", total_kernel_time / number_images);
 
   // Release OpenCL resources
 
   for (int i = 0; i < number_platforms_used; i++) {
       clReleaseProgram(program[i]);
-      clReleaseKernel(deviceInfos[i].kernel);
-      clReleaseCommandQueue(deviceInfos[i].queue);
-      clReleaseContext(deviceInfos[i].context);
+      clReleaseKernel(kernel[i]);
+      clReleaseCommandQueue(command_queue[i]);
+      clReleaseContext(context[i]);
   }
+
   return 0;
 }
