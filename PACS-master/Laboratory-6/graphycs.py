@@ -3,7 +3,7 @@ import numpy as np
 
 
 
-x = ['heterogeneous system', 'CPU multicore', 'GPU']
+x = ['heterogeneous system', 'multicore CPU', 'GPU']
 y_kernel_time = [13.810394, 21.726354, 10.286731]
 y_overall_time = [49.588739, 95.941153, 65.407475]
 y_launch_kernel = [31.621257, 1.196688, 18.444806]
