@@ -70,3 +70,66 @@ Kernel write bandwidth: 5764032966.063794
 Kernel read bandwidth: 8224142948.872133
 Kernel time: 0.000287
 
+
+# HISTOGRAM
+
+2 DEVICES
+Time to create images: 1.202363
+Time for device 0: 0.004351
+Probability for device 0: 0.314271
+Time for device 1: 0.001994
+Probability for device 1: 0.685729
+Number of images processed by device 0: 1581
+Number of images processed by device 1: 3419
+Workload in images processed by device 0: 31.620000
+Workload in images processed by device 1: 68.380000
+Time to launch the kernel: 31.457513
+Time to execute the loop: 16.013407
+Total kernel time: 13.766708
+Workload for device 0: 0.499723
+Workload for device 1: 0.500277
+Overall time: 49.116496
+Throughput: 108097702.958857
+Memory footprint: 3165736
+Kernel write bandwidth: 11180074306.391701
+Kernel read bandwidth: 480710535397.754395
+Kernel time: 0.002753
+
+MULTICORE
+Time to create images: 1.217875
+Time for device 0: 0.004301
+Probability for device 0: 1.000000
+Number of images processed by device 0: 5000
+Number of images processed by device 1: 0
+Workload in images processed by device 0: 100.000000
+Workload in images processed by device 1: 0.000000
+Time to launch the kernel: 1.191950
+Time to execute the loop: 93.418495
+Total kernel time: 21.722493
+Workload for device 0: 1.000000
+Overall time: 95.999387
+Throughput: 60355345.059384
+Memory footprint: 3165736
+Kernel write bandwidth: 3254922045.340870
+Kernel read bandwidth: 414938546530.718872
+Kernel time: 0.004344
+
+
+GPU
+Time to create images: 1.191717
+Time for device 0: 0.002008
+Probability for device 0: 1.000000
+Number of images processed by device 0: 5000
+Number of images processed by device 1: 0
+Workload in images processed by device 0: 100.000000
+Workload in images processed by device 1: 0.000000
+Time to launch the kernel: 18.463807
+Time to execute the loop: 46.745003
+Total kernel time: 10.332141
+Workload for device 0: 1.000000
+Overall time: 66.715350
+Throughput: 127462737.069770
+Memory footprint: 3165736
+Kernel write bandwidth: 15009518134.794643
+Kernel read bandwidth: 550042157896.239868
+Kernel time: 0.002066

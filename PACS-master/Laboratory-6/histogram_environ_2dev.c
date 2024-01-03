@@ -680,7 +680,7 @@ int main(int argc, char** argv)
 
   // Trhoughput of the kernel in terms of pixels flipped per second
   end = clock();
-  plotHistogram(redHistogram[1234], greenHistogram[1234], blueHistogram[1234]);
+  // plotHistogram(redHistogram[1234], greenHistogram[1234], blueHistogram[1234]);
   double throughput = kernel_throughput / number_images;
 
   // Memory footprint
