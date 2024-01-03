@@ -98,7 +98,7 @@ int main(int argc, char** argv)
                         	// global domain size for our calculation
   size_t local_size;                       	// local domain size for our calculation
 
-  const int number_platforms_used = 1;			// number of platforms to use
+  const int number_platforms_used = 2;			// number of platforms to use
   const int number_images = 5000;				// number of images to process
   double time_kernel;
 
@@ -217,7 +217,7 @@ int main(int argc, char** argv)
     platforms_selected[i] = -1;
   }
   int found = 0;
-  for (int i = 2; i < n_platforms; i++){
+  for (int i = 0; i < n_platforms; i++){
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
     if (str_buffer[7] >= '2'){
@@ -489,8 +489,8 @@ int main(int argc, char** argv)
     t_r = (double) (end_r - start_r) / 1000000000.0;
     k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
     
-    time_device[i] = (t_w + t_k + t_r); 
-    // time_device[i] = (t_k);  
+    // time_device[i] = (t_w + t_k + t_r); 
+    time_device[i] = (t_k);  
     total_kernel_time += time_device[i];
   }
 
@@ -649,8 +649,8 @@ int main(int argc, char** argv)
     t_r = (double) (end_r - start_r) / 1000000000.0;
     k_r_bandwidth += (double) (sizeof(int)*histogramSize)  / t_r;
     
-    time_device[platform_assigned[i]] += (t_w + t_k + t_r); 
-    // time_device[platform_assigned[i]] += (t_k);                              
+    // time_device[platform_assigned[i]] += (t_w + t_k + t_r); 
+    time_device[platform_assigned[i]] += (t_k);                              
   }
 
   end_loop = clock();
