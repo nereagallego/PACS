@@ -667,7 +667,7 @@ int main(int argc, char** argv)
   printf("Total kernel time: %f\n", total_kernel_time);
 
   for (int i = 0; i < number_platforms_used; i++) {
-    workload_device[i] = time_device[i] / total_kernel_time;
+    workload_device[i] = time_device[i] / k_t;
     printf("Workload for device %d: %f\n", i, workload_device[i]);
   }
 
