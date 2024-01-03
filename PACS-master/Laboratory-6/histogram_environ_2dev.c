@@ -379,30 +379,30 @@ int main(int argc, char** argv)
     }
     prob[i] = 0;
     int device_index = i;
-    in_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    in_device_object[0] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
-    out_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    out_device_object[0] = clCreateBuffer(context[device_index], CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
-    red_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    red_histogram_device_object[0] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
-    green_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    green_histogram_device_object[0] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
-    blue_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    blue_histogram_device_object[0] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
 
     // Write data into the memory object
-    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_FALSE, 0, sizeof(unsigned char)*img_size,
-                              images[i]->data(), 0, NULL, &kernel_write_bandwidth[i]);
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[0], CL_FALSE, 0, sizeof(unsigned char)*img_size,
+                              images[0]->data(), 0, NULL, &kernel_write_bandwidth[i]);
     cl_error(err, "Failed to enqueue a write command\n");
 
     // Set the arguments to the kernel
-    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[i]);
+    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[0]);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &red_histogram_device_object[i]);
+    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &red_histogram_device_object[0]);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(kernel[device_index], 2, sizeof(cl_mem), &green_histogram_device_object[i]);
+    err = clSetKernelArg(kernel[device_index], 2, sizeof(cl_mem), &green_histogram_device_object[0]);
     cl_error(err, "Failed to set kernel arguments\n");
-    err = clSetKernelArg(kernel[device_index], 3, sizeof(cl_mem), &blue_histogram_device_object[i]);
+    err = clSetKernelArg(kernel[device_index], 3, sizeof(cl_mem), &blue_histogram_device_object[0]);
     cl_error(err, "Failed to set kernel arguments\n");
     err = clSetKernelArg(kernel[device_index], 4, sizeof(int), &width);
     cl_error(err, "Failed to set kernel arguments\n");
@@ -418,16 +418,16 @@ int main(int argc, char** argv)
 
     // Read data from device memory to host memory
     // Should use a new output image for each image
-    err = clEnqueueReadBuffer(command_queue[device_index], red_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
-                              redHistogram[i].data(), 0, NULL, &kernel_read_bandwidth1[i]);
+    err = clEnqueueReadBuffer(command_queue[device_index], red_histogram_device_object[0], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              redHistogram[0].data(), 0, NULL, &kernel_read_bandwidth1[i]);
     cl_error(err, "Failed to enqueue a read command\n\n");
 
-    err = clEnqueueReadBuffer(command_queue[device_index], green_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
-                              greenHistogram[i].data(), 0, NULL, &kernel_read_bandwidth2[i]);
+    err = clEnqueueReadBuffer(command_queue[device_index], green_histogram_device_object[0], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              greenHistogram[0].data(), 0, NULL, &kernel_read_bandwidth2[i]);
     cl_error(err, "Failed to enqueue a read command\n\n");
 
-    err = clEnqueueReadBuffer(command_queue[device_index], blue_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
-                              blueHistogram[i].data(), 0, NULL, &kernel_read_bandwidth3[i]);
+    err = clEnqueueReadBuffer(command_queue[device_index], blue_histogram_device_object[0], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              blueHistogram[0].data(), 0, NULL, &kernel_read_bandwidth3[i]);
     cl_error(err, "Failed to enqueue a read command\n\n");
     // printf("Data read from device for image %d\n", i);
 
@@ -502,7 +502,7 @@ int main(int argc, char** argv)
   }
 
   int platform_assigned[number_images];
-  for (int i = number_platforms_used ; i < number_images; i++) {
+  for (int i = 1 ; i < number_images; i++) {
     // Select the device with random uniform distribution
     double r = (double) rand() / (double) RAND_MAX;
     double sum = 0.0;
