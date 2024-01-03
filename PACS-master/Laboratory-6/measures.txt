@@ -74,62 +74,62 @@ Kernel time: 0.000287
 # HISTOGRAM
 
 2 DEVICES
-Time to create images: 1.202363
-Time for device 0: 0.004351
-Probability for device 0: 0.314271
-Time for device 1: 0.001994
-Probability for device 1: 0.685729
-Number of images processed by device 0: 1581
-Number of images processed by device 1: 3419
-Workload in images processed by device 0: 31.620000
-Workload in images processed by device 1: 68.380000
-Time to launch the kernel: 31.457513
-Time to execute the loop: 16.013407
-Total kernel time: 13.766708
-Workload for device 0: 0.499723
-Workload for device 1: 0.500277
-Overall time: 49.116496
-Throughput: 108097702.958857
+Time to create images: 1.193710
+Time for device 0: 0.004331
+Probability for device 0: 0.315414
+Time for device 1: 0.001995
+Probability for device 1: 0.684586
+Number of images processed by device 0: 1582
+Number of images processed by device 1: 3418
+Workload in images processed by device 0: 31.640000
+Workload in images processed by device 1: 68.360000
+Time to launch the kernel: 31.621257
+Time to execute the loop: 16.337686
+Total kernel time: 13.810394
+Workload for device 0: 0.500986
+Workload for device 1: 0.499014
+Overall time: 49.588739
+Throughput: 107937507.099991
 Memory footprint: 3165736
-Kernel write bandwidth: 11180074306.391701
-Kernel read bandwidth: 480710535397.754395
-Kernel time: 0.002753
+Kernel write bandwidth: 11113937789.187035
+Kernel read bandwidth: 821492801.450774
+Kernel time: 0.002762
 
 MULTICORE
-Time to create images: 1.217875
-Time for device 0: 0.004301
+Time to create images: 1.204084
+Time for device 0: 0.004232
 Probability for device 0: 1.000000
 Number of images processed by device 0: 5000
 Number of images processed by device 1: 0
 Workload in images processed by device 0: 100.000000
 Workload in images processed by device 1: 0.000000
-Time to launch the kernel: 1.191950
-Time to execute the loop: 93.418495
-Total kernel time: 21.722493
+Time to launch the kernel: 1.196688
+Time to execute the loop: 93.370049
+Total kernel time: 21.726354
 Workload for device 0: 1.000000
-Overall time: 95.999387
-Throughput: 60355345.059384
+Overall time: 95.941153
+Throughput: 60343946.373056
 Memory footprint: 3165736
-Kernel write bandwidth: 3254922045.340870
-Kernel read bandwidth: 414938546530.718872
-Kernel time: 0.004344
+Kernel write bandwidth: 3249360635.964880
+Kernel read bandwidth: 613379506.323401
+Kernel time: 0.004345
 
 
 GPU
-Time to create images: 1.191717
-Time for device 0: 0.002008
+Time to create images: 1.200674
+Time for device 0: 0.001994
 Probability for device 0: 1.000000
 Number of images processed by device 0: 5000
 Number of images processed by device 1: 0
 Workload in images processed by device 0: 100.000000
 Workload in images processed by device 1: 0.000000
-Time to launch the kernel: 18.463807
-Time to execute the loop: 46.745003
-Total kernel time: 10.332141
+Time to launch the kernel: 18.444806
+Time to execute the loop: 45.449497
+Total kernel time: 10.286731
 Workload for device 0: 1.000000
-Overall time: 66.715350
-Throughput: 127462737.069770
+Overall time: 65.407475
+Throughput: 128015352.257909
 Memory footprint: 3165736
-Kernel write bandwidth: 15009518134.794643
-Kernel read bandwidth: 550042157896.239868
-Kernel time: 0.002066
+Kernel write bandwidth: 15090871915.620354
+Kernel read bandwidth: 835603084.868862
+Kernel time: 0.002057

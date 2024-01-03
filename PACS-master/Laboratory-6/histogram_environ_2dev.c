@@ -625,7 +625,7 @@ int main(int argc, char** argv)
     err = clGetEventProfilingInfo(kernel_read_bandwidth1[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
     cl_error(err, "Failed to get profiling info\n");
     t_r = (double) (end_r - start_r) / 1000000000.0;
-    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+    k_r_bandwidth += (double) (sizeof(int)*histogramSize) / t_r;
 
     clWaitForEvents(1, &kernel_read_bandwidth2[i]);
 
@@ -636,7 +636,7 @@ int main(int argc, char** argv)
     err = clGetEventProfilingInfo(kernel_read_bandwidth2[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
     cl_error(err, "Failed to get profiling info\n");
     t_r = (double) (end_r - start_r) / 1000000000.0;
-    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+    k_r_bandwidth += (double) (sizeof(int)*histogramSize)  / t_r;
 
     clWaitForEvents(1, &kernel_read_bandwidth3[i]);
 
@@ -647,7 +647,7 @@ int main(int argc, char** argv)
     err = clGetEventProfilingInfo(kernel_read_bandwidth3[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
     cl_error(err, "Failed to get profiling info\n");
     t_r = (double) (end_r - start_r) / 1000000000.0;
-    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+    k_r_bandwidth += (double) (sizeof(int)*histogramSize)  / t_r;
     
     // time_device[platform_assigned[i]] += (t_w + t_k + t_r); 
     time_device[platform_assigned[i]] += (t_k);                              
