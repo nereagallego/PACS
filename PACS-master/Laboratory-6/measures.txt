@@ -114,7 +114,6 @@ Kernel write bandwidth: 3249360635.964880
 Kernel read bandwidth: 613379506.323401
 Kernel time: 0.004345
 
-
 GPU
 Time to create images: 1.200674
 Time for device 0: 0.001994
@@ -133,3 +132,66 @@ Memory footprint: 3165736
 Kernel write bandwidth: 15090871915.620354
 Kernel read bandwidth: 835603084.868862
 Kernel time: 0.002057
+
+
+--------------------------------------------------------------------------------------
+
+2 DEVICES
+Time to create images: 1.200191
+Time for device 0: 0.004522
+Probability for device 0: 0.316794
+Time for device 1: 0.002097
+Probability for device 1: 0.683206
+Number of images processed by device 0: 1589
+Number of images processed by device 1: 3411
+Workload in images processed by device 0: 31.780000
+Workload in images processed by device 1: 68.220000
+Time to launch the kernel: 31.815620
+Time to execute the loop: 15.856405
+Total kernel time: 14.502151
+Workload for device 0: 0.511649
+Workload for device 1: 0.488351
+Overall time: 49.344550
+Throughput: 107853469.474023
+Memory footprint: 3165736
+Kernel write bandwidth: 11123240642.832752
+Kernel read bandwidth: 804565439.720331
+Kernel time: 0.002900
+
+MULTICORE
+Time to create images: 1.208056
+Time for device 0: 0.004512
+Probability for device 0: 1.000000
+Number of images processed by device 0: 5000
+Number of images processed by device 1: 0
+Workload in images processed by device 0: 100.000000
+Workload in images processed by device 1: 0.000000
+Time to launch the kernel: 1.181401
+Time to execute the loop: 93.481962
+Total kernel time: 23.583867
+Workload for device 0: 1.000000
+Overall time: 96.046347
+Throughput: 60342623.274487
+Memory footprint: 3165736
+Kernel write bandwidth: 3244568041.033839
+Kernel read bandwidth: 620459172.521325
+Kernel time: 0.004717
+
+GPU
+Time to create images: 1.204769
+Time for device 0: 0.002090
+Probability for device 0: 1.000000
+Number of images processed by device 0: 5000
+Number of images processed by device 1: 0
+Workload in images processed by device 0: 100.000000
+Workload in images processed by device 1: 0.000000
+Time to launch the kernel: 18.473964
+Time to execute the loop: 44.750713
+Total kernel time: 10.572117
+Workload for device 0: 1.000000
+Overall time: 64.731798
+Throughput: 127918188.541402
+Memory footprint: 3165736
+Kernel write bandwidth: 15088311209.445137
+Kernel read bandwidth: 843671629.252132
+Kernel time: 0.002114
