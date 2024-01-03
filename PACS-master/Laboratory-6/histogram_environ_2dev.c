@@ -1,7 +1,8 @@
+ 
 ////////////////////////////////////////////////////////////////////
-//File: histogram_environ.c
+//File: image_flip_environ.c
 //
-//Description: histogram using OpenCL
+//Description: image flip using OpenCL
 //
 // 
 ////////////////////////////////////////////////////////////////////
@@ -15,12 +16,14 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <vector>
+#include <time.h>
 #ifdef __APPLE__
   #include <OpenCL/opencl.h>
 #else
   #include <CL/cl.h>
 #endif
+
+#include <vector>
 
 using namespace cimg_library;
   
@@ -81,7 +84,7 @@ void plotHistogram(const std::vector<unsigned int>& redHistogram,
 
 int main(int argc, char** argv)
 {
-
+  
   clock_t start, end;
   clock_t start_k, end_k;
   double cpu_time_used, cpu_time_used_k;
@@ -92,12 +95,12 @@ int main(int argc, char** argv)
   char str_buffer[t_buf];		// auxiliary buffer	
   size_t e_buf;				// effective size of str_buffer in use
 	    
+                        	// global domain size for our calculation
   size_t local_size;                       	// local domain size for our calculation
 
   const int number_platforms_used = 2;			// number of platforms to use
   const int number_images = 5000;				// number of images to process
-
-  double time_kernel = 0;					// time to execute the kernel
+  double time_kernel;
 
   const cl_uint num_platforms_ids = 10;				// max of allocatable platforms
   cl_platform_id platforms_ids[num_platforms_ids];		// array of platforms
@@ -107,11 +110,22 @@ int main(int argc, char** argv)
   cl_uint n_devices[num_platforms_ids];				// effective number of devices in use for each platform
 	
   cl_device_id device_id;             				// compute device id 
-  cl_context context[number_platforms_used];                 				// compute context
-  cl_command_queue command_queue[number_platforms_used];     				// compute command queue
-  
+  cl_context context[number_platforms_used];
+  cl_command_queue command_queue[number_platforms_used];
   
   cl_ulong host_timer_resolution;					// host timer resolution
+
+  cl_event kernel_time[number_images];
+  cl_event kernel_write_bandwidth[number_images];
+  cl_event kernel_read_bandwidth1[number_images];
+  cl_event kernel_read_bandwidth2[number_images];
+  cl_event kernel_read_bandwidth3[number_images];
+
+  double k_w_bandwidth = 0;
+  double k_r_bandwidth = 0;
+  double k_t = 0;
+  double kernel_throughput = 0;
+  double time_device[number_platforms_used];
 
   // 1. Scan the available platforms:
   err = clGetPlatformIDs (num_platforms_ids, platforms_ids, &n_platforms);
@@ -130,12 +144,13 @@ int main(int argc, char** argv)
     // err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_HOST_TIMER_RESOLUTION, sizeof(cl_ulong), &host_timer_resolution, NULL);
     // cl_error (err, "Error: Failed to get info of the platform\n");
     // printf("\t[%d]-Platform Host Timer Resolution: %d\n", i, host_timer_resolution);
-    // // print version
+    // print version
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
     cl_error (err, "Error: Failed to get info of the platform\n");
     printf("\t[%d]-Platform Version: %s\n", i, str_buffer);
   }
   printf("\n");
+
   // ***Task***: print on the screen the name, host_timer_resolution, vendor, versionm, ...
 
   // 2. Scan for devices in each platform
@@ -178,6 +193,11 @@ int main(int argc, char** argv)
       cl_error(err, "clGetDeviceInfo: Getting device max work group size");
       printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_GROUP_SIZE: %d\n", i, 0, max_work_group_size);
 
+      size_t max_work_item_dimensions;
+      err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(max_work_item_dimensions), &max_work_item_dimensions, NULL);
+      cl_error(err, "clGetDeviceInfo: Getting device max work item dimensions");
+      printf("\t\t [%d]-Platform [%d]-Device CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS: %d\n", i, 0, max_work_item_dimensions);
+
       // print the profiling timer resolution
       size_t profiling_timer_resolution;
       err = clGetDeviceInfo(devices_ids[i][j], CL_DEVICE_PROFILING_TIMER_RESOLUTION, sizeof(profiling_timer_resolution), &profiling_timer_resolution, NULL);
@@ -187,8 +207,15 @@ int main(int argc, char** argv)
   }	
   // ***Task***: print on the screen the cache size, global mem size, local memsize, max work group size, profiling timer resolution and ... of each device
 
+  clock_t start_aux, end_aux;
+
+  start_aux = clock();
+
   // Select two platforms with version at least 2.0
-  int platforms_selected[number_platforms_used] = {-1, -1};
+  int platforms_selected[number_platforms_used];
+  for(int i = 0; i < number_platforms_used; i++){
+    platforms_selected[i] = -1;
+  }
   int found = 0;
   for (int i = 0; i < n_platforms; i++){
     err = clGetPlatformInfo(platforms_ids[i], CL_PLATFORM_VERSION, t_buf*sizeof(char), str_buffer, &e_buf);
@@ -209,16 +236,20 @@ int main(int argc, char** argv)
   }
 
   // Select the first device of each platform
-  int devices_selected[number_platforms_used] = {-1, -1};
+  int devices_selected[number_platforms_used];
   for (int i = 0; i < number_platforms_used; i++){
     devices_selected[i] = 0;
+    time_device[i] = 0;
   }
+  
 
   // Create two contexts and command queues, one for each platform and device
   cl_command_queue_properties proprt[] = { CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0 };
+
   for (int i = 0; i < number_platforms_used; i++) {
     // Create a context for the platform
     cl_context_properties properties[] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platforms_ids[platforms_selected[i]], 0 };
+  
     context[i] = clCreateContext(properties, 1, devices_ids[platforms_selected[i]], NULL, NULL, &err);
     cl_error(err, "Failed to create a compute context\n");
     printf("Context for platform %d created\n", i);
@@ -229,9 +260,10 @@ int main(int argc, char** argv)
     printf("Command queue for platform %d created\n", i);
   }
 
+
   // Calculate size of the file
   FILE *fileHandler = fopen("histogram.cl", "r");
-  if (fileHandler == NULL){
+  if (fileHandler ==   NULL){
     printf("Failed to open kernel file\n");
     exit(-1);
   }
@@ -280,6 +312,13 @@ int main(int argc, char** argv)
       printf("Kernel %d created\n", i);
   }
 
+  end_aux = clock();
+  double cpu_time_used_aux = ((double) (end_aux - start_aux)) / CLOCKS_PER_SEC;
+  printf("Time to create contexts, command queues, programs and kernels: %f\n", cpu_time_used_aux);
+
+  clock_t start_imgs, end_imgs;
+  start_imgs = clock();
+
   // Allocate memory for 5000 pointers to images
   CImg<unsigned char>** images = (CImg<unsigned char>**)malloc(number_images * sizeof(CImg<unsigned char>*));
   // Check if memory allocation was successful
@@ -298,6 +337,7 @@ int main(int argc, char** argv)
         exit(1);
     }
   }
+  printf("Images initialized\n");
 
   // Get the properties from the first image
   int width = images[0]->width();
@@ -307,100 +347,364 @@ int main(int argc, char** argv)
   // Create OpenCL buffer memory objects
   size_t img_size = width * height * spectrum;
 
-  const int histogramSize = 256;
- 
-  std::vector<std::vector<unsigned int>> redHistograms(number_images, std::vector<unsigned int>(histogramSize, 0));
-  std::vector<std::vector<unsigned int>> greenHistograms(number_images, std::vector<unsigned int>(histogramSize, 0));
-  std::vector<std::vector<unsigned int>> blueHistograms(number_images, std::vector<unsigned int>(histogramSize, 0));
+  end_imgs = clock();
+  double cpu_time_used_imgs = ((double) (end_imgs - start_imgs)) / CLOCKS_PER_SEC;
+  printf("Time to create images: %f\n", cpu_time_used_imgs);
 
-  // Create ONE memory buffers for each context
-  cl_mem in_device_object[number_images];
-  cl_mem redBuffer[number_images];
-  cl_mem greenBuffer[number_images];
-  cl_mem blueBuffer[number_images];
-  for (int i = 0; i < number_images; i++) {
-      int device_index = i % number_platforms_used; // Use this to alternate between the two devices 
-
-      in_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
-      cl_error(err, "Failed to create memory buffer at device\n");
-
-      redBuffer[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int) * histogramSize, NULL, &err);
-      cl_error(err, "Failed to create red histogram buffer\n");
-      greenBuffer[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int) * histogramSize, NULL, &err);
-      cl_error(err, "Failed to create green histogram buffer\n");
-      blueBuffer[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int) * histogramSize, NULL, &err);
-      cl_error(err, "Failed to create blue histogram buffer\n");
-
-      // Write data into the memory object
-      err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_TRUE, 0, sizeof(unsigned char)*img_size, images[i]->data(), 0, NULL, NULL);
-      cl_error(err, "Failed to enqueue a write command\n");
-
-      // Set the arguments to our compute kernel
-      err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[i]);
-      cl_error(err, "Failed to set kernel arguments\n");
-      err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &redBuffer[i]);
-      cl_error(err, "Failed to set kernel arguments\n");
-      err = clSetKernelArg(kernel[device_index], 2, sizeof(cl_mem), &greenBuffer[i]);
-      cl_error(err, "Failed to set kernel arguments\n");
-      err = clSetKernelArg(kernel[device_index], 3, sizeof(cl_mem), &blueBuffer[i]);
-      cl_error(err, "Failed to set kernel arguments\n");
-      err = clSetKernelArg(kernel[device_index], 4, sizeof(int), &width);
-      cl_error(err, "Failed to set kernel arguments\n");
-      err = clSetKernelArg(kernel[device_index], 5, sizeof(int), &height);
-      cl_error(err, "Failed to set kernel arguments\n");
-
-      // Launch kernel
-      const size_t global_size[2] = {static_cast<size_t>(width), static_cast<size_t>(height)};
-
-      start_k = clock();
-
-      err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, NULL);
-      cl_error(err, "Failed to launch kernel to the device\n");
-      printf("Kernel launched\n");  
-
-      err = clEnqueueReadBuffer(command_queue[device_index], redBuffer[i], CL_TRUE, 0, sizeof(unsigned int) * histogramSize, redHistograms[i].data(), 0, NULL, NULL);
-      cl_error(err, "Failed to read red histogram from the device\n");
-      err = clEnqueueReadBuffer(command_queue[device_index], greenBuffer[i], CL_TRUE, 0, sizeof(unsigned int) * histogramSize, greenHistograms[i].data(), 0, NULL, NULL);
-      cl_error(err, "Failed to read green histogram from the device\n");
-      err = clEnqueueReadBuffer(command_queue[device_index], blueBuffer[i], CL_TRUE, 0, sizeof(unsigned int) *            histogramSize, blueHistograms[i].data(), 0, NULL, NULL);
-      cl_error(err, "Failed to read blue histogram from the device\n");
-      printf("Data read from device\n");
-
-      end_k = clock();  
-      time_kernel += ((double) (end_k - start_k)) / CLOCKS_PER_SEC;                                          
-  }
+  time_kernel = 0;
   
+  clock_t start_kernel, end_kernel;
+  start_kernel = clock();
 
-  // Plot histograms
-  plotHistogram(redHistograms[1234], greenHistograms[1234], blueHistograms[1234]);
+  const int histogramSize = 256;
+  std::vector<std::vector<unsigned int>> redHistogram(number_images, std::vector<unsigned int>(histogramSize, 0));
+  std::vector<std::vector<unsigned int>> greenHistogram(number_images, std::vector<unsigned int>(histogramSize, 0));
+  std::vector<std::vector<unsigned int>> blueHistogram(number_images, std::vector<unsigned int>(histogramSize, 0));
 
-  // double time_kernel = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
+  // Loop over the images and enqueue the kernel execution commands to the appropriate command queue
+  cl_mem in_device_object[number_images];
+  cl_mem out_device_object[number_images];
+  cl_mem red_histogram_device_object[number_images];
+  cl_mem green_histogram_device_object[number_images];
+  cl_mem blue_histogram_device_object[number_images];
+  double prob[number_platforms_used];
+  double total_kernel_time = 0;
+  double t_w, t_k, t_r;
+  int count_device_0 = 0, count_device_1 = 0;
+  for (int i = 0; i < number_platforms_used; i++) {
+    if (i == 0) {
+      count_device_0++;
+    } else {
+      count_device_1++;
+    }
+    prob[i] = 0;
+    int device_index = i;
+    in_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    out_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    red_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    green_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    blue_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
 
-  // Bandwidth to/from memory to/from kernel. Amount data interchanged with memory for every second
-  double bandwidth = (double) (sizeof(unsigned char)*img_size) + (sizeof(unsigned int) * histogramSize * 3) + 2 * sizeof(int) / time_kernel;
+    // Write data into the memory object
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_FALSE, 0, sizeof(unsigned char)*img_size,
+                              images[i]->data(), 0, NULL, &kernel_write_bandwidth[i]);
+    cl_error(err, "Failed to enqueue a write command\n");
 
-  // Trhoughput of the kernel in terms of number of pixels processed per second
-  double throughput = (double) (width*height) / time_kernel;
+    // Set the arguments to the kernel
+    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &red_histogram_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 2, sizeof(cl_mem), &green_histogram_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 3, sizeof(cl_mem), &blue_histogram_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 4, sizeof(int), &width);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 5, sizeof(int), &height);
+    cl_error(err, "Failed to set kernel arguments\n");
+
+    // Launch kernel
+    const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
+
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, &kernel_time[i]);
+    cl_error(err, "Failed to launch kernel to the device\n");
+    // printf("Kernel launched for image %d\n", i);
+
+    // Read data from device memory to host memory
+    // Should use a new output image for each image
+    err = clEnqueueReadBuffer(command_queue[device_index], red_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              redHistogram[i].data(), 0, NULL, &kernel_read_bandwidth1[i]);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+
+    err = clEnqueueReadBuffer(command_queue[device_index], green_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              greenHistogram[i].data(), 0, NULL, &kernel_read_bandwidth2[i]);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+
+    err = clEnqueueReadBuffer(command_queue[device_index], blue_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              blueHistogram[i].data(), 0, NULL, &kernel_read_bandwidth3[i]);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+    // printf("Data read from device for image %d\n", i);
+
+    clWaitForEvents(1, &kernel_write_bandwidth[i]);
+
+    // Get kernel write bandwidth
+    cl_ulong start_w, end_w;
+    err = clGetEventProfilingInfo(kernel_write_bandwidth[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_write_bandwidth[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_w = (double) (end_w - start_w) / 1000000000.0;
+    k_w_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_w;
+
+    clWaitForEvents(1, &kernel_time[i]);
+
+    // Get kernel execution time
+    cl_ulong start_k, end_k;
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_k = (double) (end_k - start_k) / 1000000000.0;
+    k_t += t_k;
+
+    // Get kernel throughput
+    kernel_throughput += (double) (width*height) / t_k;
+
+    clWaitForEvents(1, &kernel_read_bandwidth1[i]);
+
+    // Get kernel read bandwidth
+    cl_ulong start_r, end_r;
+    err = clGetEventProfilingInfo(kernel_read_bandwidth1[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth1[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_r = (double) (end_r - start_r) / 1000000000.0;
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+
+    clWaitForEvents(1, &kernel_read_bandwidth2[i]);
+
+    // Get kernel read bandwidth
+    
+    err = clGetEventProfilingInfo(kernel_read_bandwidth2[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth2[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_r = (double) (end_r - start_r) / 1000000000.0;
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+
+    clWaitForEvents(1, &kernel_read_bandwidth3[i]);
+
+    // Get kernel read bandwidth
+  
+    err = clGetEventProfilingInfo(kernel_read_bandwidth3[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth3[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_r = (double) (end_r - start_r) / 1000000000.0;
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+    
+    // time_device[i] = (t_w + t_k + t_r); 
+    time_device[i] = (t_k);  
+    total_kernel_time += time_device[i];
+  }
+
+  
+  for (int i = 0; i < number_platforms_used; i++) {
+    prob[i] = number_platforms_used > 1 ? 1 - time_device[i] / total_kernel_time : time_device[i] / total_kernel_time;
+    printf("Time for device %d: %f\n", i, time_device[i]);
+    printf("Probability for device %d: %f\n", i, prob[i]);
+  }
+
+  int platform_assigned[number_images];
+  for (int i = number_platforms_used ; i < number_images; i++) {
+    // Select the device with random uniform distribution
+    double r = (double) rand() / (double) RAND_MAX;
+    double sum = 0.0;
+    int device_index = 0;
+
+    for (int j = 0; j < number_platforms_used; j++) {
+      sum += prob[j];
+      if (r <= sum) {
+        device_index = j;
+        break;
+      }
+    }
+    platform_assigned[i] = device_index;
+
+    if (device_index == 0) {
+      count_device_0++;
+    } else {
+      count_device_1++;
+    }
+    
+    in_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    out_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_WRITE_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    red_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    green_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+    blue_histogram_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_WRITE, sizeof(unsigned int)*histogramSize, NULL, &err);
+    cl_error(err, "Failed to create memory buffer at device\n");
+
+    // Write data into the memory object
+    err = clEnqueueWriteBuffer(command_queue[device_index], in_device_object[i], CL_FALSE, 0, sizeof(unsigned char)*img_size,
+                              images[i]->data(), 0, NULL, &kernel_write_bandwidth[i]);
+    cl_error(err, "Failed to enqueue a write command\n");
+
+    // Set the arguments to the kernel
+    err = clSetKernelArg(kernel[device_index], 0, sizeof(cl_mem), &in_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 1, sizeof(cl_mem), &red_histogram_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 2, sizeof(cl_mem), &green_histogram_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 3, sizeof(cl_mem), &blue_histogram_device_object[i]);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 4, sizeof(int), &width);
+    cl_error(err, "Failed to set kernel arguments\n");
+    err = clSetKernelArg(kernel[device_index], 5, sizeof(int), &height);
+    cl_error(err, "Failed to set kernel arguments\n");
+
+    // Launch kernel
+    const size_t global_size[2] = {static_cast<size_t>(width) , static_cast<size_t>(height)};
+
+    err = clEnqueueNDRangeKernel(command_queue[device_index], kernel[device_index], 2, NULL, global_size, NULL, 0, NULL, &kernel_time[i]);
+    cl_error(err, "Failed to launch kernel to the device\n");
+    // printf("Kernel launched for image %d\n", i);
+
+    // Read data from device memory to host memory
+    // Should use a new output image for each image
+    err = clEnqueueReadBuffer(command_queue[device_index], red_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              redHistogram[i].data(), 0, NULL, &kernel_read_bandwidth1[i]);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+
+    err = clEnqueueReadBuffer(command_queue[device_index], green_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              greenHistogram[i].data(), 0, NULL, &kernel_read_bandwidth2[i]);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+
+    err = clEnqueueReadBuffer(command_queue[device_index], blue_histogram_device_object[i], CL_FALSE, 0,sizeof(unsigned int)*histogramSize, 
+                              blueHistogram[i].data(), 0, NULL, &kernel_read_bandwidth3[i]);
+    cl_error(err, "Failed to enqueue a read command\n\n");
+    // printf("Data read from device for image %d\n", i);
+    
+  }
+
+  printf("Number of images processed by device 0: %d\n", count_device_0);
+  printf("Number of images processed by device 1: %d\n", count_device_1);
+  printf("Workload in images processed by device 0: %f\n", (double) count_device_0 * 100 / number_images);
+  printf("Workload in images processed by device 1: %f\n", (double) count_device_1 * 100 / number_images);
+
+  end_kernel = clock();
+  double cpu_time_used_kernel = ((double) (end_kernel - start_kernel)) / CLOCKS_PER_SEC;
+  printf("Time to launch the kernel: %f\n", cpu_time_used_kernel);
+  
+  clock_t start_loop, end_loop;
+  start_loop = clock();
+
+  
+  for (int i = number_platforms_used ; i < number_images; i++) {
+    clWaitForEvents(1, &kernel_write_bandwidth[i]);
+
+    // Get kernel write bandwidth
+    cl_ulong start_w, end_w;
+    err = clGetEventProfilingInfo(kernel_write_bandwidth[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_write_bandwidth[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_w, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_w = (double) (end_w - start_w) / 1000000000.0;
+    k_w_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_w;
+
+    clWaitForEvents(1, &kernel_time[i]);
+
+    // Get kernel execution time
+    cl_ulong start_k, end_k;
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_time[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_k, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_k = (double) (end_k - start_k) / 1000000000.0;
+    k_t += t_k;
+
+    // Get kernel throughput
+    kernel_throughput += (double) (width*height) / t_k;
+
+    clWaitForEvents(1, &kernel_read_bandwidth1[i]);
+
+    // Get kernel read bandwidth
+    cl_ulong start_r, end_r;
+    err = clGetEventProfilingInfo(kernel_read_bandwidth1[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth1[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_r = (double) (end_r - start_r) / 1000000000.0;
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+
+    clWaitForEvents(1, &kernel_read_bandwidth2[i]);
+
+    // Get kernel read bandwidth
+ 
+    err = clGetEventProfilingInfo(kernel_read_bandwidth2[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth2[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_r = (double) (end_r - start_r) / 1000000000.0;
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+
+    clWaitForEvents(1, &kernel_read_bandwidth3[i]);
+
+    // Get kernel read bandwidth
+  
+    err = clGetEventProfilingInfo(kernel_read_bandwidth3[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    err = clGetEventProfilingInfo(kernel_read_bandwidth3[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end_r, NULL);
+    cl_error(err, "Failed to get profiling info\n");
+    t_r = (double) (end_r - start_r) / 1000000000.0;
+    k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
+    
+    // time_device[platform_assigned[i]] += (t_w + t_k + t_r); 
+    time_device[platform_assigned[i]] += (t_k);                              
+  }
+
+  end_loop = clock();
+  double cpu_time_used_loop = ((double) (end_loop - start_loop)) / CLOCKS_PER_SEC;
+  printf("Time to execute the loop: %f\n", cpu_time_used_loop);
+  
+  // Workload unbalance
+  double workload_device[number_platforms_used];
+  total_kernel_time = 0;
+  for (int i = 0; i < number_platforms_used; i++) {
+    total_kernel_time += time_device[i];
+  }
+
+  printf("Total kernel time: %f\n", total_kernel_time);
+
+  for (int i = 0; i < number_platforms_used; i++) {
+    workload_device[i] = time_device[i] / total_kernel_time;
+    printf("Workload for device %d: %f\n", i, workload_device[i]);
+  }
+
+  // Display the first image
+  // images[1234]->display("Image flip");
+
+  // // Save the first image
+  // images[1234]->save("lenna_flip.jpeg");
+
+
+  // Trhoughput of the kernel in terms of pixels flipped per second
+  end = clock();
+  plotHistogram(redHistogram[1234], greenHistogram[1234], blueHistogram[1234]);
+  double throughput = kernel_throughput / number_images;
 
   // Memory footprint
-  // Local memory footprint
-  size_t local_memory_footprint = (size_t) (sizeof(unsigned char)*img_size) + histogramSize*3*sizeof(unsigned int) + 2 * sizeof(int); // image + histogram buffers
+  size_t local_memory_footprint = (size_t) ((sizeof(unsigned char)*img_size*2) + (sizeof(int)*2));
   size_t kernel_memory_footprint_in = 0.0;
-  size_t kernel_memory_footprint_hist = 0.0;
-  err = clGetMemObjectInfo(in_device_object[0], CL_MEM_SIZE, sizeof(kernel_memory_footprint_in), &kernel_memory_footprint_in, NULL);
+  size_t kernel_memory_footprint_out = 0.0;
+  err = clGetMemObjectInfo(in_device_object[0], CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_in, NULL);
   cl_error(err, "Failed to get memory object info\n");
-  err = clGetMemObjectInfo(redBuffer[0], CL_MEM_SIZE, sizeof(kernel_memory_footprint_hist), &kernel_memory_footprint_hist, NULL);
+  err = clGetMemObjectInfo(out_device_object[0], CL_MEM_SIZE, sizeof(size_t), &kernel_memory_footprint_out, NULL);
   cl_error(err, "Failed to get memory object info\n");
-  size_t kernel_memory_footprint_out = kernel_memory_footprint_hist * 3 * number_images;
 
-  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in * number_images+ kernel_memory_footprint_out + 2 * sizeof(int);
+  size_t memory_footprint = local_memory_footprint + kernel_memory_footprint_in + kernel_memory_footprint_out + sizeof(int)* number_images;
 
-  // Print histograms
-  // for (int i = 0; i < histogramSize; i++){
-  //   printf("Red[%d]: %d\n", i, redHistogram[i]);
-  //   printf("Green[%d]: %d\n", i, greenHistogram[i]);
-  //   printf("Blue[%d]: %d\n", i, blueHistogram[i]);
-  // }
+  cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+
+
+  printf("Overall time: %f\n", cpu_time_used);
+  
+  printf("Throughput: %f\n", throughput);
+  printf("Memory footprint: %zu\n", memory_footprint);
+
+  printf("Kernel write bandwidth: %f\n", k_w_bandwidth / number_images);
+  printf("Kernel read bandwidth: %f\n", k_r_bandwidth / number_images);
+  printf("Kernel time: %f\n", total_kernel_time / number_images);
 
   // Release OpenCL resources
 
@@ -411,16 +715,5 @@ int main(int argc, char** argv)
       clReleaseContext(context[i]);
   }
 
-  end = clock();
-  cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-  cpu_time_used_k = ((double) (end_k - start_k)) / CLOCKS_PER_SEC;
-
-  printf("Kernel time: %f\n", cpu_time_used_k);
-  printf("Overall time: %f\n", cpu_time_used);
-  printf("Bandwidth: %f\n", bandwidth);
-  printf("Throughput: %f\n", throughput);
-  printf("Memory footprint: %zu\n", memory_footprint);
-
   return 0;
 }
-

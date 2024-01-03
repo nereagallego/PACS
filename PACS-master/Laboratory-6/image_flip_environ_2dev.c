@@ -334,7 +334,6 @@ int main(int argc, char** argv)
       count_device_1++;
     }
     prob[i] = 0;
-    time_device[i] = 0;
     int device_index = i;
     in_device_object[i] = clCreateBuffer(context[device_index], CL_MEM_READ_ONLY, sizeof(unsigned char)*img_size, NULL, &err);
     cl_error(err, "Failed to create memory buffer at device\n");
@@ -406,17 +405,19 @@ int main(int argc, char** argv)
     t_r = (double) (end_r - start_r) / 1000000000.0;
     k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
     
-    time_device[i] += (t_w + t_k + t_r);  
+    // time_device[i] = (t_w + t_k + t_r); 
+    time_device[i] = (t_k);  
     total_kernel_time += time_device[i];
   }
 
   
   for (int i = 0; i < number_platforms_used; i++) {
-    prob[i] = 1 - time_device[i] / total_kernel_time;
+    prob[i] = number_platforms_used > 1 ? 1 - time_device[i] / total_kernel_time : time_device[i] / total_kernel_time;
     printf("Time for device %d: %f\n", i, time_device[i]);
     printf("Probability for device %d: %f\n", i, prob[i]);
   }
 
+  int platform_assigned[number_images];
   for (int i = number_platforms_used ; i < number_images; i++) {
     // Select the device with random uniform distribution
     double r = (double) rand() / (double) RAND_MAX;
@@ -430,6 +431,7 @@ int main(int argc, char** argv)
         break;
       }
     }
+    platform_assigned[i] = device_index;
 
     if (device_index == 0) {
       count_device_0++;
@@ -475,6 +477,8 @@ int main(int argc, char** argv)
 
   printf("Number of images processed by device 0: %d\n", count_device_0);
   printf("Number of images processed by device 1: %d\n", count_device_1);
+  printf("Workload in images processed by device 0: %f\n", (double) count_device_0 * 100 / number_images);
+  printf("Workload in images processed by device 1: %f\n", (double) count_device_1 * 100 / number_images);
 
   end_kernel = clock();
   double cpu_time_used_kernel = ((double) (end_kernel - start_kernel)) / CLOCKS_PER_SEC;
@@ -521,7 +525,8 @@ int main(int argc, char** argv)
     t_r = (double) (end_r - start_r) / 1000000000.0;
     k_r_bandwidth += (double) (sizeof(unsigned char)*img_size) / t_r;
     
-    time_device[i % number_platforms_used] += (t_w + t_k + t_r);                              
+    // time_device[platform_assigned[i]] += (t_w + t_k + t_r); 
+    time_device[platform_assigned[i]] += (t_k);                              
   }
 
   end_loop = clock();
